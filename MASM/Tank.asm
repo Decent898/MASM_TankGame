@@ -68,6 +68,7 @@ BULLET ENDS
     sinTable    dd 360 dup(0)
     cosTable    dd 360 dup(0)
     bullets     BULLET MAX_BULLETS dup(<0,0,0,0,0,0>)
+; 数据格式: active, pos_x, pos_y, vel_x, vel_y, bounces
 
     p1          TANK <0,0,0,0,0,0>
     p2          TANK <0,0,0,0,0,0>

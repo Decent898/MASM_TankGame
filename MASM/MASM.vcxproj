@@ -19,7 +19,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="Tank.asm" />
+    <MASM Include="TankGame.asm" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="constants.inc" />
+    <None Include="data.inc" />
+    <None Include="gamelogic.asm" />
+    <None Include="menu.asm" />
+    <None Include="render.asm" />
+    <None Include="audio.asm" />
+    <None Include="Tank.asm" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

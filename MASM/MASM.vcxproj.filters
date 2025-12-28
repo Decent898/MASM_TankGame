@@ -15,8 +15,31 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="Tank.asm">
+    <MASM Include="TankGame.asm">
       <Filter>源文件</Filter>
     </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="constants.inc">
+      <Filter>头文件</Filter>
+    </None>
+    <None Include="data.inc">
+      <Filter>头文件</Filter>
+    </None>
+    <None Include="gamelogic.asm">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="menu.asm">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="render.asm">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="audio.asm">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="Tank.asm">
+      <Filter>源文件</Filter>
+    </None>
   </ItemGroup>
 </Project>
