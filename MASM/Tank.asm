@@ -71,6 +71,13 @@ BULLET ENDS
 
     p1          TANK <0,0,0,0,0,0>
     p2          TANK <0,0,0,0,0,0>
+    
+    TANK_HALF_W     equ 12
+    TANK_HALF_H     equ 9
+    BARREL_LEN      equ 22
+
+    COLOR_P1   equ 0000A0FFh   ; 蓝色（RGB = 255,160,0 → 实际是 BGR）
+    COLOR_P2   equ 00FF4040h   ; 红色
 
 .data?
     hInstance   dd ?
@@ -227,7 +234,7 @@ InitGame proc
     mov p1.pos_x, eax
     mov p1.pos_y, eax
     mov p1.angle, 90
-    mov p1.color, 00FF0000h
+    mov p1.color, COLOR_P1
     mov p1.active, 1
     mov p1.cooldown, 0
 
@@ -238,7 +245,7 @@ InitGame proc
     shl eax, 8
     mov p2.pos_y, eax
     mov p2.angle, 270
-    mov p2.color, 000000FFh
+    mov p2.color, COLOR_P2
     mov p2.active, 1
     mov p2.cooldown, 0
 
@@ -331,7 +338,8 @@ IsWall endp
 
 CanMove proc targetX:DWORD, targetY:DWORD
     LOCAL r:DWORD
-    mov r, 14 * SCALE
+    mov r, TANK_HALF_W * SCALE
+
     
     mov eax, targetX
     sub eax, r
@@ -572,38 +580,48 @@ Update proc
             .if SIGN?
                 neg eax
             .endif
-            .if eax < 15 * SCALE
+            ; Hit P1 (rectangle AABB)
+            mov eax, (BULLET PTR [esi]).pos_x
+            sub eax, p1.pos_x
+            test eax, eax
+            .if SIGN?
+                neg eax
+            .endif
+            .if eax < TANK_HALF_W * SCALE
                 mov eax, (BULLET PTR [esi]).pos_y
                 sub eax, p1.pos_y
                 test eax, eax
                 .if SIGN?
                     neg eax
                 .endif
-                .if eax < 15 * SCALE
+                .if eax < TANK_HALF_H * SCALE
                     mov p1.active, 0
                     mov (BULLET PTR [esi]).active, 0
                 .endif
             .endif
 
-            ; Hit P2
+
+            ; ===== Hit P2 =====
             mov eax, (BULLET PTR [esi]).pos_x
             sub eax, p2.pos_x
             test eax, eax
             .if SIGN?
                 neg eax
             .endif
-            .if eax < 15 * SCALE
+            .if eax < TANK_HALF_W * SCALE
                 mov eax, (BULLET PTR [esi]).pos_y
                 sub eax, p2.pos_y
                 test eax, eax
                 .if SIGN?
                     neg eax
                 .endif
-                .if eax < 15 * SCALE
+                .if eax < TANK_HALF_H * SCALE
                     mov p2.active, 0
                     mov (BULLET PTR [esi]).active, 0
                 .endif
             .endif
+
+
 
             ; Check Bounces
             cmp (BULLET PTR [esi]).bounces, 0
@@ -661,7 +679,7 @@ FireBullet proc pTank:DWORD
             sar eax, 8
             mov (BULLET PTR [esi]).vel_y, eax
             
-            mov (BULLET PTR [esi]).bounces, 5
+            mov (BULLET PTR [esi]).bounces, 7
             mov [edi].cooldown, 20
             
             ASSUME edi:nothing
@@ -676,9 +694,17 @@ FireBullet proc pTank:DWORD
 FireBullet endp
 
 DrawOneTank proc hDC:DWORD, pTank:DWORD
-    LOCAL sx:DWORD, sy:DWORD
-    LOCAL ex:DWORD, ey:DWORD
-    LOCAL hBrush:DWORD, hOld:DWORD
+    LOCAL centerX:SDWORD
+    LOCAL centerY:SDWORD
+    LOCAL x1:SDWORD, y1:SDWORD
+    LOCAL x2:SDWORD, y2:SDWORD
+    LOCAL x3:SDWORD, y3:SDWORD
+    LOCAL x4:SDWORD, y4:SDWORD
+    LOCAL endX:SDWORD, endY:SDWORD
+    LOCAL hBrush:DWORD
+    LOCAL hOld:DWORD
+    LOCAL pts[4]:POINT
+    LOCAL hOldPen:DWORD
 
     mov esi, pTank
     ASSUME esi:PTR TANK
@@ -687,54 +713,166 @@ DrawOneTank proc hDC:DWORD, pTank:DWORD
         ret
     .endif
 
+    ; -------- center --------
     mov eax, [esi].pos_x
     sar eax, 8
-    mov sx, eax
+    mov centerX, eax
 
     mov eax, [esi].pos_y
     sar eax, 8
-    mov sy, eax
+    mov centerY, eax
 
+    ; -------- sin / cos --------
+    mov edx, [esi].angle
+    mov ebx, cosTable[edx*4]   ; cos (×256)
+    mov edi, sinTable[edx*4]   ; sin (×256)
+
+    ; ===== 计算四个角 =====
+    ; corner1 (-w,-h)
+    mov eax, -TANK_HALF_W
+    imul eax, ebx
+    mov ecx, -TANK_HALF_H
+    imul ecx, edi
+    sub eax, ecx
+    sar eax, 8
+    add eax, centerX
+    mov x1, eax
+
+    mov eax, -TANK_HALF_W
+    imul eax, edi
+    mov ecx, -TANK_HALF_H
+    imul ecx, ebx
+    add eax, ecx
+    sar eax, 8
+    add eax, centerY
+    mov y1, eax
+
+    ; corner2 (w,-h)
+    mov eax, TANK_HALF_W
+    imul eax, ebx
+    mov ecx, -TANK_HALF_H
+    imul ecx, edi
+    sub eax, ecx
+    sar eax, 8
+    add eax, centerX
+    mov x2, eax
+
+    mov eax, TANK_HALF_W
+    imul eax, edi
+    mov ecx, -TANK_HALF_H
+    imul ecx, ebx
+    add eax, ecx
+    sar eax, 8
+    add eax, centerY
+    mov y2, eax
+
+    ; corner3 (w,h)
+    mov eax, TANK_HALF_W
+    imul eax, ebx
+    mov ecx, TANK_HALF_H
+    imul ecx, edi
+    sub eax, ecx
+    sar eax, 8
+    add eax, centerX
+    mov x3, eax
+
+    mov eax, TANK_HALF_W
+    imul eax, edi
+    mov ecx, TANK_HALF_H
+    imul ecx, ebx
+    add eax, ecx
+    sar eax, 8
+    add eax, centerY
+    mov y3, eax
+
+    ; corner4 (-w,h)
+    mov eax, -TANK_HALF_W
+    imul eax, ebx
+    mov ecx, TANK_HALF_H
+    imul ecx, edi
+    sub eax, ecx
+    sar eax, 8
+    add eax, centerX
+    mov x4, eax
+
+    mov eax, -TANK_HALF_W
+    imul eax, edi
+    mov ecx, TANK_HALF_H
+    imul ecx, ebx
+    add eax, ecx
+    sar eax, 8
+    add eax, centerY
+    mov y4, eax
+
+    ; -------- POINT 数组 --------
+    mov eax, x1
+    mov pts[0].x, eax
+    mov eax, y1
+    mov pts[0].y, eax
+
+    mov eax, x2
+    mov pts[8].x, eax   ; 每个 POINT 结构体大小为 8 字节 (x:4, y:4)
+    mov eax, y2
+    mov pts[8].y, eax
+
+    mov eax, x3
+    mov pts[16].x, eax
+    mov eax, y3
+    mov pts[16].y, eax
+
+    mov eax, x4
+    mov pts[24].x, eax
+    mov eax, y4
+    mov pts[24].y, eax
+
+    ; -------- draw filled tank --------
     invoke CreateSolidBrush, [esi].color
     mov hBrush, eax
     invoke SelectObject, hDC, hBrush
     mov hOld, eax
 
-    mov eax, sx
-    sub eax, 15
-    mov ecx, sy
-    sub ecx, 15
-    mov edx, sx
-    add edx, 15
-    push edx
-    mov edx, sy
-    add edx, 15
-    pop ebx
-    invoke Ellipse, hDC, eax, ecx, ebx, edx
+    invoke GetStockObject, NULL_PEN
+    invoke SelectObject, hDC, eax
+    mov hOldPen, eax
+
+    invoke Polygon, hDC, addr pts, 4
 
     invoke SelectObject, hDC, hOld
     invoke DeleteObject, hBrush
 
-    mov edx, [esi].angle
-    mov eax, cosTable[edx*4]
-    imul eax, 25
-    sar eax, 8
-    add eax, sx
-    mov ex, eax
+    ; 1. 恢复可见画笔 (否则 LineTo 用的是 NULL_PEN，看不见)
+    invoke GetStockObject, BLACK_PEN
+    invoke SelectObject, hDC, eax
+    ; 注意：这里不需要手动 Delete BLACK_PEN，因为它是系统对象
 
+    ; 2. 重新加载 sin/cos 以确保坐标计算正确
     mov edx, [esi].angle
-    mov eax, sinTable[edx*4]
-    imul eax, 25
-    sar eax, 8
-    add eax, sy
-    mov ey, eax
+    mov ebx, cosTable[edx*4]   ; cos
+    mov edi, sinTable[edx*4]   ; sin
 
-    invoke MoveToEx, hDC, sx, sy, NULL
-    invoke LineTo, hDC, ex, ey
+    ; 3. 计算炮管终点
+    mov eax, ebx
+    imul eax, BARREL_LEN
+    sar eax, 8
+    add eax, centerX
+    mov endX, eax
+
+    mov eax, edi
+    imul eax, BARREL_LEN
+    sar eax, 8
+    add eax, centerY
+    mov endY, eax
+
+    ; 4. 执行绘画
+    invoke MoveToEx, hDC, centerX, centerY, NULL
+    invoke LineTo, hDC, endX, endY
 
     ASSUME esi:nothing
     ret
 DrawOneTank endp
+
+
+
 
 Draw proc hDC:DWORD
     LOCAL hBg:DWORD, hWall:DWORD
