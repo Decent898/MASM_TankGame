@@ -55,6 +55,7 @@ BULLET ENDS
     szP2Win     db "PLAYER 2 WINS!", 0
     szNoBullet  db "No Active Bullets", 0
     
+    ; 调试文字格式 (虽然界面关了，但数据留着不报错)
     szFmtP1     db "P1 Pos: (%d, %d) Angle: %d", 0
     szFmtBullet db "Bullet[%d]: (%d, %d)", 0
     szFmtDist   db "Distance to P1: %d px (Safe > 15)", 0
@@ -530,7 +531,6 @@ Update proc
         imul ebx, sizeof BULLET
         lea esi, bullets[ebx]
 
-        ; --- 修复点 1：Move to register first ---
         mov eax, (BULLET PTR [esi]).active
         .if eax != 0
             ; Move X
@@ -802,7 +802,6 @@ Draw proc hDC:DWORD
         imul ebx, sizeof BULLET
         lea esi, bullets[ebx]
         
-        ; --- 修复点 2：Move to register first ---
         mov eax, (BULLET PTR [esi]).active
         .if eax != 0
             mov eax, (BULLET PTR [esi]).pos_x
@@ -842,119 +841,119 @@ Draw proc hDC:DWORD
         invoke TextOut, hDC, 350, 280, addr szP1Win, 14
     .endif
 
-    mov rect.left, 10
-    mov rect.top, 10
-    mov rect.right, 300
-    mov rect.bottom, 150
-    invoke CreateSolidBrush, 0
-    mov hBg, eax
-    invoke FillRect, hDC, addr rect, hBg
-    invoke DeleteObject, hBg
+    ; --- DEBUG OVERLAY (注释掉下面这部分) ---
+    ; mov rect.left, 10
+    ; mov rect.top, 10
+    ; mov rect.right, 300
+    ; mov rect.bottom, 150
+    ; invoke CreateSolidBrush, 0
+    ; mov hBg, eax
+    ; invoke FillRect, hDC, addr rect, hBg
+    ; invoke DeleteObject, hBg
 
-    invoke SetTextColor, hDC, 0000FF00h
+    ; invoke SetTextColor, hDC, 0000FF00h
 
-    mov eax, p1.pos_x
-    sar eax, 8
-    mov px, eax
-    mov eax, p1.pos_y
-    sar eax, 8
-    mov py, eax
-    invoke wsprintf, addr buffer, addr szFmtP1, px, py, p1.angle
-    invoke crt_strlen, addr buffer
-    invoke TextOut, hDC, 20, 20, addr buffer, eax
+    ; mov eax, p1.pos_x
+    ; sar eax, 8
+    ; mov px, eax
+    ; mov eax, p1.pos_y
+    ; sar eax, 8
+    ; mov py, eax
+    ; invoke wsprintf, addr buffer, addr szFmtP1, px, py, p1.angle
+    ; invoke crt_strlen, addr buffer
+    ; invoke TextOut, hDC, 20, 20, addr buffer, eax
 
-    mov bulletIdx, -1
-    mov ecx, 0
-    .while ecx < MAX_BULLETS
-        mov ebx, ecx
-        imul ebx, sizeof BULLET
-        lea esi, bullets[ebx]
-        ; --- 修复点 3：Move to register first ---
-        mov eax, (BULLET PTR [esi]).active
-        .if eax != 0
-            mov bulletIdx, ecx
-            .break
-        .endif
-        inc ecx
-    .endw
+    ; mov bulletIdx, -1
+    ; mov ecx, 0
+    ; .while ecx < MAX_BULLETS
+    ;     mov ebx, ecx
+    ;     imul ebx, sizeof BULLET
+    ;     lea esi, bullets[ebx]
+    ;     mov eax, (BULLET PTR [esi]).active
+    ;     .if eax != 0
+    ;         mov bulletIdx, ecx
+    ;         .break
+    ;     .endif
+    ;     inc ecx
+    ; .endw
 
-    .if bulletIdx != -1
-        mov ebx, bulletIdx
-        imul ebx, sizeof BULLET
-        lea esi, bullets[ebx]
+    ; .if bulletIdx != -1
+    ;     mov ebx, bulletIdx
+    ;     imul ebx, sizeof BULLET
+    ;     lea esi, bullets[ebx]
         
-        mov eax, (BULLET PTR [esi]).pos_x
-        sar eax, 8
-        mov px, eax
-        mov eax, (BULLET PTR [esi]).pos_y
-        sar eax, 8
-        mov py, eax
+    ;     mov eax, (BULLET PTR [esi]).pos_x
+    ;     sar eax, 8
+    ;     mov px, eax
+    ;     mov eax, (BULLET PTR [esi]).pos_y
+    ;     sar eax, 8
+    ;     mov py, eax
         
-        invoke wsprintf, addr buffer, addr szFmtBullet, bulletIdx, px, py
-        invoke crt_strlen, addr buffer
-        invoke TextOut, hDC, 20, 40, addr buffer, eax
+    ;     invoke wsprintf, addr buffer, addr szFmtBullet, bulletIdx, px, py
+    ;     invoke crt_strlen, addr buffer
+    ;     invoke TextOut, hDC, 20, 40, addr buffer, eax
         
-        finit
-        mov eax, (BULLET PTR [esi]).pos_x
-        sub eax, p1.pos_x
-        sar eax, 8
-        mov tempX, eax
+    ;     finit
+    ;     mov eax, (BULLET PTR [esi]).pos_x
+    ;     sub eax, p1.pos_x
+    ;     sar eax, 8
+    ;     mov tempX, eax
         
-        mov eax, (BULLET PTR [esi]).pos_y
-        sub eax, p1.pos_y
-        sar eax, 8
-        mov tempY, eax
+    ;     mov eax, (BULLET PTR [esi]).pos_y
+    ;     sub eax, p1.pos_y
+    ;     sar eax, 8
+    ;     mov tempY, eax
         
-        fild tempX
-        fmul st(0), st(0)
-        fild tempY
-        fmul st(0), st(0)
-        faddp st(1), st(0)
-        fsqrt
-        fistp dist
+    ;     fild tempX
+    ;     fmul st(0), st(0)
+    ;     fild tempY
+    ;     fmul st(0), st(0)
+    ;     faddp st(1), st(0)
+    ;     fsqrt
+    ;     fistp dist
         
-        invoke wsprintf, addr buffer, addr szFmtDist, dist
+    ;     invoke wsprintf, addr buffer, addr szFmtDist, dist
         
-        .if dist < 15
-            invoke SetTextColor, hDC, 000000FFh
-        .endif
+    ;     .if dist < 15
+    ;         invoke SetTextColor, hDC, 000000FFh
+    ;     .endif
         
-        invoke crt_strlen, addr buffer
-        invoke TextOut, hDC, 20, 60, addr buffer, eax
-    .else
-        invoke TextOut, hDC, 20, 40, addr szNoBullet, 17
-    .endif
+    ;     invoke crt_strlen, addr buffer
+    ;     invoke TextOut, hDC, 20, 60, addr buffer, eax
+    ; .else
+    ;     invoke TextOut, hDC, 20, 40, addr szNoBullet, 17
+    ; .endif
 
-    .if p1.active != 0
-        invoke CreatePen, PS_DOT, 1, 00FFFFFFh
-        mov hPen, eax
-        invoke SelectObject, hDC, hPen
-        mov hOldPen, eax
-        invoke GetStockObject, NULL_BRUSH
-        invoke SelectObject, hDC, eax
+    ; .if p1.active != 0
+    ;     invoke CreatePen, PS_DOT, 1, 00FFFFFFh
+    ;     mov hPen, eax
+    ;     invoke SelectObject, hDC, hPen
+    ;     mov hOldPen, eax
+    ;     invoke GetStockObject, NULL_BRUSH
+    ;     invoke SelectObject, hDC, eax
         
-        mov eax, p1.pos_x
-        sar eax, 8
-        mov px, eax
-        mov eax, p1.pos_y
-        sar eax, 8
-        mov py, eax
+    ;     mov eax, p1.pos_x
+    ;     sar eax, 8
+    ;     mov px, eax
+    ;     mov eax, p1.pos_y
+    ;     sar eax, 8
+    ;     mov py, eax
         
-        mov eax, px
-        sub eax, 15
-        mov ecx, py
-        sub ecx, 15
-        mov edx, px
-        add edx, 15
-        push edx
-        mov edx, py
-        add edx, 15
-        pop ebx
-        invoke Ellipse, hDC, eax, ecx, ebx, edx
+    ;     mov eax, px
+    ;     sub eax, 15
+    ;     mov ecx, py
+    ;     sub ecx, 15
+    ;     mov edx, px
+    ;     add edx, 15
+    ;     push edx
+    ;     mov edx, py
+    ;     add edx, 15
+    ;     pop ebx
+    ;     invoke Ellipse, hDC, eax, ecx, ebx, edx
         
-        invoke SelectObject, hDC, hOldPen
-        invoke DeleteObject, hPen
-    .endif
+    ;     invoke SelectObject, hDC, hOldPen
+    ;     invoke DeleteObject, hPen
+    ; .endif
 
     ret
 Draw endp
