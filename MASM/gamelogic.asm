@@ -2,6 +2,16 @@
 ; GameLogic.asm - 游戏核心逻辑
 ; ========================================
 
+; --- 【新增】函数原型声明 ---
+; 必须放在任何 Invoke 调用之前
+InitMap              PROTO
+CheckMapConnectivity PROTO
+TryVisit             PROTO :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
+IsWall               PROTO :DWORD, :DWORD
+; 【修改】函数改名为 CheckTankMove，参数名也做了唯一化处理
+CheckTankMove        PROTO :DWORD, :DWORD, :DWORD
+FireBullet           PROTO :DWORD
+
 ; --- 初始化游戏 ---
 InitGame proc
     LOCAL i:DWORD
@@ -129,16 +139,16 @@ InitMap endp
 
 ; --- 检查地图连通性（BFS）---
 CheckMapConnectivity proc uses esi edi
-    LOCAL queue[400]:DWORD          ; BFS队列（最大400个位置）
+    LOCAL queue[400]:DWORD          ; BFS队列
     LOCAL visited[400]:DWORD        ; 访问标记数组
     LOCAL queueFront:DWORD          ; 队列前指针
     LOCAL queueRear:DWORD           ; 队列后指针
     LOCAL current:DWORD             ; 当前位置
     LOCAL row:DWORD, col:DWORD
     LOCAL newRow:DWORD, newCol:DWORD
-    LOCAL newPos:DWORD
+    ; [已移除] LOCAL newPos:DWORD (未使用)
     LOCAL target:DWORD              ; 目标位置
-    LOCAL i:DWORD
+    ; [已移除] LOCAL i:DWORD (未使用)
     
     ; 初始化visited数组
     lea edi, visited
@@ -322,14 +332,15 @@ WallHit:
 IsWall endp
 
 ; --- 检查坦克是否可以移动（考虑旋转）---
-CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
+; 【重大修改】函数重命名为 CheckTankMove，参数名 destX, destY, inAngle 避免一切冲突
+CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
     LOCAL corner_x:DWORD, corner_y:DWORD
     LOCAL cos_val:SDWORD, sin_val:SDWORD
     LOCAL local_x:SDWORD, local_y:SDWORD
-    LOCAL rot_x:SDWORD, rot_y:SDWORD
+    ; [已移除] LOCAL rot_x:SDWORD, rot_y:SDWORD (未使用)
     
     ; 获取旋转角度的sin/cos值
-    mov edx, angle
+    mov edx, inAngle
     mov eax, cosTable[edx*4]
     mov cos_val, eax
     mov eax, sinTable[edx*4]
@@ -347,7 +358,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     sub eax, ebx
     sar eax, 8              ; 除以256
     shl eax, 8              ; 转换为定点数
-    add eax, targetX
+    add eax, destX          ; 使用 destX
     mov corner_x, eax
     
     ; rot_y = local_x * sin + local_y * cos
@@ -358,7 +369,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     add eax, ebx
     sar eax, 8              ; 除以256
     shl eax, 8              ; 转换为定点数
-    add eax, targetY
+    add eax, destY          ; 使用 destY
     mov corner_y, eax
     
     invoke IsWall, corner_x, corner_y
@@ -378,7 +389,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     sub eax, ebx
     sar eax, 8
     shl eax, 8
-    add eax, targetX
+    add eax, destX
     mov corner_x, eax
     
     mov eax, local_x
@@ -388,7 +399,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     add eax, ebx
     sar eax, 8
     shl eax, 8
-    add eax, targetY
+    add eax, destY
     mov corner_y, eax
     
     invoke IsWall, corner_x, corner_y
@@ -408,7 +419,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     sub eax, ebx
     sar eax, 8
     shl eax, 8
-    add eax, targetX
+    add eax, destX
     mov corner_x, eax
     
     mov eax, local_x
@@ -418,7 +429,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     add eax, ebx
     sar eax, 8
     shl eax, 8
-    add eax, targetY
+    add eax, destY
     mov corner_y, eax
     
     invoke IsWall, corner_x, corner_y
@@ -438,7 +449,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     sub eax, ebx
     sar eax, 8
     shl eax, 8
-    add eax, targetX
+    add eax, destX
     mov corner_x, eax
     
     mov eax, local_x
@@ -448,7 +459,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     add eax, ebx
     sar eax, 8
     shl eax, 8
-    add eax, targetY
+    add eax, destY
     mov corner_y, eax
     
     invoke IsWall, corner_x, corner_y
@@ -459,7 +470,7 @@ CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
     
     mov eax, 1
     ret
-CanMove endp
+CheckTankMove endp
 
 ; --- 更新游戏逻辑 ---
 UpdateGame proc
@@ -521,7 +532,8 @@ UpdateGame proc
         add eax, p1.pos_y
         mov nextY, eax
 
-        invoke CanMove, nextX, nextY, p1.angle
+        ; 【修改】调用新名字函数
+        invoke CheckTankMove, nextX, nextY, p1.angle
         .if eax == 1
             mov eax, nextX
             mov p1.pos_x, eax
@@ -590,7 +602,8 @@ UpdateGame proc
         add eax, p2.pos_y
         mov nextY, eax
 
-        invoke CanMove, nextX, nextY, p2.angle
+        ; 【修改】调用新名字函数
+        invoke CheckTankMove, nextX, nextY, p2.angle
         .if eax == 1
             mov eax, nextX
             mov p2.pos_x, eax
