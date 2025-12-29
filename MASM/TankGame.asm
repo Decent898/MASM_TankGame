@@ -34,7 +34,7 @@ InitGame        PROTO
 InitMap         PROTO
 UpdateGame      PROTO
 IsWall          PROTO :DWORD, :DWORD
-CanMove         PROTO :DWORD, :DWORD, :DWORD
+CheckTankMove   PROTO :DWORD, :DWORD, :DWORD
 FireBullet      PROTO :DWORD
 CheckMapConnectivity PROTO
 TryVisit        PROTO :DWORD, :DWORD, :DWORD, :DWORD, :DWORD

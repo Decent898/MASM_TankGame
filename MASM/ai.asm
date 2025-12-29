@@ -157,7 +157,7 @@ UpdateAI proc
         add eax, p2.pos_y
         mov nextY, eax
         
-        invoke CanMove, nextX, nextY, p2.angle
+        invoke CheckTankMove, nextX, nextY, p2.angle
         .if eax == 1
             mov eax, nextX
             mov p2.pos_x, eax
@@ -394,7 +394,7 @@ EvadeBullet proc
     add eax, p2.pos_y
     mov nextY, eax
     
-    invoke CanMove, nextX, nextY, p2.angle
+    invoke CheckTankMove, nextX, nextY, p2.angle
     .if eax == 1
         mov eax, nextX
         mov p2.pos_x, eax
@@ -423,7 +423,7 @@ EvadeBullet proc
         add eax, p2.pos_y
         mov nextY, eax
         
-        invoke CanMove, nextX, nextY, p2.angle
+        invoke CheckTankMove, nextX, nextY, p2.angle
         .if eax == 1
             mov eax, nextX
             mov p2.pos_x, eax
@@ -489,7 +489,7 @@ RandomMove proc
     add eax, p2.pos_y
     mov nextY, eax
     
-    invoke CanMove, nextX, nextY, p2.angle
+    invoke CheckTankMove, nextX, nextY, p2.angle
     .if eax == 1
         mov eax, nextX
         mov p2.pos_x, eax
