@@ -31,8 +31,18 @@ STATE_GAME_OVER equ 3
 
 ; --- 菜单选项 ---
 MENU_START      equ 0
-MENU_QUIT       equ 1
-MENU_OPTIONS    equ 2
+MENU_MODE       equ 1
+MENU_DIFFICULTY equ 2
+MENU_QUIT       equ 3
+
+; --- 游戏模式 ---
+MODE_PVP        equ 0
+MODE_PVE        equ 1
+
+; --- AI难度 ---
+AI_EASY         equ 0
+AI_MEDIUM       equ 1
+AI_HARD         equ 2
 
 ; --- 颜色定义 ---
 COLOR_P1        equ 0000A0FFh   ; 橙色 (BGR格式)
@@ -60,4 +70,5 @@ BULLET STRUCT
     vel_x       dd ?
     vel_y       dd ?
     bounces     dd ?
+    owner       dd ?    ; 指向拥有者TANK的指针
 BULLET ENDS

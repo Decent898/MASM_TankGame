@@ -13,7 +13,7 @@ HandleMenuInput proc
     .if eax == 0
         dec menuSelection
         .if SDWORD PTR menuSelection < 0
-            mov menuSelection, 1
+            mov menuSelection, 3  ; 改为3个选项
         .endif
         mov menuAnimTick, 10
     .endif
@@ -21,15 +21,63 @@ HandleMenuInput proc
 @CheckDown:
     invoke GetAsyncKeyState, VK_DOWN
     test ax, 8000h
-    jz @CheckEnter
+    jz @CheckLeft
     
     mov eax, menuAnimTick
     .if eax == 0
         inc menuSelection
-        .if menuSelection > 1
+        .if menuSelection > 3  ; 改为3个选项
             mov menuSelection, 0
         .endif
         mov menuAnimTick, 10
+    .endif
+
+@CheckLeft:
+    invoke GetAsyncKeyState, VK_LEFT
+    test ax, 8000h
+    jz @CheckRight
+    
+    mov eax, menuAnimTick
+    .if eax == 0
+        mov eax, menuSelection
+        .if eax == MENU_MODE
+            ; 切换模式
+            xor gameMode, 1
+            mov eax, gameMode
+            mov aiEnabled, eax
+            mov menuAnimTick, 10
+        .elseif eax == MENU_DIFFICULTY
+            ; 降低难度
+            dec aiDifficulty
+            .if SDWORD PTR aiDifficulty < 0
+                mov aiDifficulty, 2
+            .endif
+            mov menuAnimTick, 10
+        .endif
+    .endif
+
+@CheckRight:
+    invoke GetAsyncKeyState, VK_RIGHT
+    test ax, 8000h
+    jz @CheckEnter
+    
+    mov eax, menuAnimTick
+    .if eax == 0
+        mov eax, menuSelection
+        .if eax == MENU_MODE
+            ; 切换模式
+            xor gameMode, 1
+            mov eax, gameMode
+            mov aiEnabled, eax
+            mov menuAnimTick, 10
+        .elseif eax == MENU_DIFFICULTY
+            ; 提高难度
+            inc aiDifficulty
+            .if aiDifficulty > 2
+                mov aiDifficulty, 0
+            .endif
+            mov menuAnimTick, 10
+        .endif
     .endif
 
 @CheckEnter:
@@ -47,6 +95,19 @@ HandleMenuInput proc
             ; 设置更长延迟防止Enter键立即触发射击
             mov menuAnimTick, 30
             jmp @UpdateAnim
+        .elseif eax == MENU_MODE
+            ; 切换模式
+            xor gameMode, 1
+            mov eax, gameMode
+            mov aiEnabled, eax
+            mov menuAnimTick, 10
+        .elseif eax == MENU_DIFFICULTY
+            ; 循环切换难度
+            inc aiDifficulty
+            .if aiDifficulty > 2
+                mov aiDifficulty, 0
+            .endif
+            mov menuAnimTick, 10
         .elseif eax == MENU_QUIT
             ; 退出游戏
             invoke PostQuitMessage, 0
@@ -336,20 +397,20 @@ DrawMenu proc hDC:DWORD
     invoke SelectObject, hDC, hPen
     mov hOldPen, eax
     
-    mov rect.left, 240
-    mov rect.top, 240
-    mov rect.right, 560
-    mov rect.bottom, 360
+    mov rect.left, 200
+    mov rect.top, 220
+    mov rect.right, 600
+    mov rect.bottom, 420
     invoke CreateSolidBrush, 00101010h
     mov hBrush, eax
     invoke FillRect, hDC, addr rect, hBrush
     invoke DeleteObject, hBrush
-    invoke RoundRect, hDC, 240, 240, 560, 360, 20, 20
+    invoke RoundRect, hDC, 200, 220, 600, 420, 20, 20
     
     invoke SelectObject, hDC, hOldPen
     invoke DeleteObject, hPen
     
-    mov textY, 265
+    mov textY, 245
     
     ; START GAME
     .if menuSelection == MENU_START
@@ -357,16 +418,52 @@ DrawMenu proc hDC:DWORD
     .else
         invoke SetTextColor, hDC, 00A0A0A0h
     .endif
-    invoke TextOut, hDC, 300, textY, addr szMenuItem1, 13
+    invoke TextOut, hDC, 270, textY, addr szMenuItem1, 13
+    
+    ; MODE
+    add textY, 45
+    .if menuSelection == MENU_MODE
+        invoke SetTextColor, hDC, COLOR_MENU_HL
+    .else
+        invoke SetTextColor, hDC, 00A0A0A0h
+    .endif
+    invoke TextOut, hDC, 270, textY, addr szMenuItem2, 9
+    
+    ; 显示当前模式
+    .if gameMode == MODE_PVP
+        invoke TextOut, hDC, 430, textY, addr szModePVP, 3
+    .else
+        invoke TextOut, hDC, 430, textY, addr szModePVE, 10
+    .endif
+    
+    ; DIFFICULTY (仅在PVE模式显示)
+    add textY, 45
+    .if gameMode == MODE_PVE
+        .if menuSelection == MENU_DIFFICULTY
+            invoke SetTextColor, hDC, COLOR_MENU_HL
+        .else
+            invoke SetTextColor, hDC, 00A0A0A0h
+        .endif
+        invoke TextOut, hDC, 270, textY, addr szMenuItem3, 15
+        
+        ; 显示当前难度
+        .if aiDifficulty == AI_EASY
+            invoke TextOut, hDC, 550, textY, addr szDiffEasy, 4
+        .elseif aiDifficulty == AI_MEDIUM
+            invoke TextOut, hDC, 550, textY, addr szDiffMedium, 6
+        .else
+            invoke TextOut, hDC, 550, textY, addr szDiffHard, 4
+        .endif
+    .endif
     
     ; QUIT
-    add textY, 55
+    add textY, 45
     .if menuSelection == MENU_QUIT
         invoke SetTextColor, hDC, COLOR_MENU_HL
     .else
         invoke SetTextColor, hDC, 00A0A0A0h
     .endif
-    invoke TextOut, hDC, 300, textY, addr szMenuItem2, 7
+    invoke TextOut, hDC, 270, textY, addr szMenuItem4, 7
     
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
@@ -379,10 +476,10 @@ DrawMenu proc hDC:DWORD
     invoke SelectObject, hDC, hFont
     invoke SetTextColor, hDC, 000000FFh  ; 红色
     
-    mov heartX, 250
+    mov heartX, 220
     mov eax, menuSelection
-    imul eax, 55
-    add eax, 265
+    imul eax, 45
+    add eax, 245
     mov heartY, eax
     
     ; 心跳动画

@@ -15,12 +15,19 @@
     szMenuTitle db "RETRO TANK BATTLE", 0
     szSubTitle  db "A Classic Arcade Experience", 0
     szMenuItem1 db "* START GAME", 0
-    szMenuItem2 db "* QUIT", 0
+    szMenuItem2 db "* MODE: ", 0
+    szMenuItem3 db "* DIFFICULTY: ", 0
+    szMenuItem4 db "* QUIT", 0
+    szModePVP   db "PVP", 0
+    szModePVE   db "PVE (vs AI)", 0
+    szDiffEasy  db "EASY", 0
+    szDiffMedium db "MEDIUM", 0
+    szDiffHard  db "HARD", 0
     szPressKey  db "Press ENTER to select", 0
     szMenuHeart db ">", 0
     szBorder1   db "=", 0
     szBorder2   db "~", 0
-    szVersion   db "v1.0 - 2025", 0
+    szVersion   db "v2.0 - 2025", 0
     
     ; --- 暂停菜单字符串 ---
     szPaused    db "= PAUSED =", 0
@@ -48,15 +55,21 @@
     map         dd MAP_ROWS * MAP_COLS dup(0)
     sinTable    dd 360 dup(0)
     cosTable    dd 360 dup(0)
-    bullets     BULLET MAX_BULLETS dup(<0,0,0,0,0,0>)
+    bullets     BULLET MAX_BULLETS dup(<0,0,0,0,0,0,0>)
     
     p1          TANK <0,0,0,0,0,0>
+    p2          TANK <0,0,0,0,0,0>
     p2          TANK <0,0,0,0,0,0>
     
     ; --- 游戏状态 ---
     gameState       dd STATE_MENU
     menuSelection   dd MENU_START
     pauseSelection  dd 0
+    
+    ; --- AI相关 ---
+    aiEnabled       dd 0        ; 0=双人, 1=人机
+    aiDifficulty    dd 1        ; 0=简单, 1=中等, 2=困难
+    gameMode        dd 0        ; 0=PVP, 1=PVE
     
     ; --- 菜单动画 ---
     menuAnimTick    dd 0

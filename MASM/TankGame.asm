@@ -34,8 +34,17 @@ InitGame        PROTO
 InitMap         PROTO
 UpdateGame      PROTO
 IsWall          PROTO :DWORD, :DWORD
-CanMove         PROTO :DWORD, :DWORD
+CanMove         PROTO :DWORD, :DWORD, :DWORD
 FireBullet      PROTO :DWORD
+CheckMapConnectivity PROTO
+TryVisit        PROTO :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
+
+; AI系统
+UpdateAI                PROTO
+CalculateAngleToTarget  PROTO :SDWORD, :SDWORD
+CheckDangerousBullets   PROTO
+EvadeBullet             PROTO
+RandomMove              PROTO
 
 ; 菜单系统
 HandleMenuInput     PROTO
@@ -196,5 +205,11 @@ WndProc proc hWin:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
     xor eax, eax
     ret
 WndProc endp
+
+; --- 包含游戏模块 ---
+include gamelogic.asm
+include ai.asm
+include menu.asm
+include render.asm
 
 end start

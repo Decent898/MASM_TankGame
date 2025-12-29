@@ -539,78 +539,84 @@ UpdateGame proc
         invoke FireBullet, addr p1
     .endif
 
-    ; === 玩家2控制 ===
-    invoke GetAsyncKeyState, VK_LEFT
-    test ax, 8000h
-    .if !ZERO?
-        mov eax, p2.angle
-        sub eax, ROT_SPEED
-        add eax, 360
-        xor edx, edx
-        mov ecx, 360
-        div ecx
-        mov p2.angle, edx
-    .endif
-
-    invoke GetAsyncKeyState, VK_RIGHT
-    test ax, 8000h
-    .if !ZERO?
-        mov eax, p2.angle
-        add eax, ROT_SPEED
-        xor edx, edx
-        mov ecx, 360
-        div ecx
-        mov p2.angle, edx
-    .endif
-
-    mov speed, 0
-    invoke GetAsyncKeyState, VK_UP
-    test ax, 8000h
-    .if !ZERO?
-        mov speed, TANK_SPEED
-    .endif
-    invoke GetAsyncKeyState, VK_DOWN
-    test ax, 8000h
-    .if !ZERO?
-        mov speed, -TANK_SPEED
-    .endif
-
-    .if speed != 0
-        mov edx, p2.angle
-        mov eax, cosTable[edx*4]
-        imul eax, speed
-        sar eax, 8
-        add eax, p2.pos_x
-        mov nextX, eax
-
-        mov edx, p2.angle
-        mov eax, sinTable[edx*4]
-        imul eax, speed
-        sar eax, 8
-        add eax, p2.pos_y
-        mov nextY, eax
-
-        invoke CanMove, nextX, nextY, p2.angle
-        .if eax == 1
-            mov eax, nextX
-            mov p2.pos_x, eax
-            mov eax, nextY
-            mov p2.pos_y, eax
-        .endif
-    .endif
-
-    .if p2.cooldown > 0
-        dec p2.cooldown
-    .endif
-    
-    ; 只在menuAnimTick为0时检测射击，防止菜单Enter键误触发
-    mov eax, menuAnimTick
-    .if eax == 0
-        invoke GetAsyncKeyState, VK_RETURN
+    ; === 玩家2控制 (PVP模式) 或 AI控制 (PVE模式) ===
+    .if aiEnabled == 0
+        ; PVP模式 - 玩家2控制
+        invoke GetAsyncKeyState, VK_LEFT
         test ax, 8000h
-        .if !ZERO? && p2.cooldown == 0
-            invoke FireBullet, addr p2
+        .if !ZERO?
+            mov eax, p2.angle
+            sub eax, ROT_SPEED
+            add eax, 360
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p2.angle, edx
         .endif
+
+        invoke GetAsyncKeyState, VK_RIGHT
+        test ax, 8000h
+        .if !ZERO?
+            mov eax, p2.angle
+            add eax, ROT_SPEED
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p2.angle, edx
+        .endif
+
+        mov speed, 0
+        invoke GetAsyncKeyState, VK_UP
+        test ax, 8000h
+        .if !ZERO?
+            mov speed, TANK_SPEED
+        .endif
+        invoke GetAsyncKeyState, VK_DOWN
+        test ax, 8000h
+        .if !ZERO?
+            mov speed, -TANK_SPEED
+        .endif
+
+        .if speed != 0
+            mov edx, p2.angle
+            mov eax, cosTable[edx*4]
+            imul eax, speed
+            sar eax, 8
+            add eax, p2.pos_x
+            mov nextX, eax
+
+            mov edx, p2.angle
+            mov eax, sinTable[edx*4]
+            imul eax, speed
+            sar eax, 8
+            add eax, p2.pos_y
+            mov nextY, eax
+
+            invoke CanMove, nextX, nextY, p2.angle
+            .if eax == 1
+                mov eax, nextX
+                mov p2.pos_x, eax
+                mov eax, nextY
+                mov p2.pos_y, eax
+            .endif
+        .endif
+
+        .if p2.cooldown > 0
+            dec p2.cooldown
+        .endif
+        
+        ; 只在menuAnimTick为0时检测射击，防止菜单Enter键误触发
+        mov eax, menuAnimTick
+        .if eax == 0
+            invoke GetAsyncKeyState, VK_RETURN
+            test ax, 8000h
+            .if !ZERO? && p2.cooldown == 0
+                invoke FireBullet, addr p2
+            .endif
+        .endif
+    .else
+        ; PVE模式 - AI控制
+        invoke UpdateAI
     .endif
 
     ; === 子弹逻辑 ===
@@ -725,6 +731,10 @@ FireBullet proc pTank:DWORD
             
             mov edi, pTank
             ASSUME edi:PTR TANK
+            
+            ; 设置子弹拥有者
+            mov eax, pTank
+            mov (BULLET PTR [esi]).owner, eax
             
             mov offset_val, 35
             
