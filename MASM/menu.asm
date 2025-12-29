@@ -384,29 +384,32 @@ DrawMenu proc hDC:DWORD
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
     
-    ; === 菜单项字体 ===
-    invoke CreateFont, 36, 0, 0, 0, FW_BOLD, 0, 0, 0, \
+    ; 菜单项字体 - 改为更精致的 28 号字，去掉粗体
+    invoke CreateFont, 28, 0, 0, 0, FW_NORMAL, 0, 0, 0, \
            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, \
-           DEFAULT_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL
+           ANTIALIASED_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL ; 使用抗锯齿质量
     mov hFont, eax
     invoke SelectObject, hDC, hFont
     
     ; 菜单项背景框
-    invoke CreatePen, PS_SOLID, 2, 00404040h
+    ; === 像素风格背景框 (硬核街机风) ===
+    
+    ; 1. 绘制外部高亮边框 (使用金色)
+    invoke CreatePen, PS_SOLID, 4, COLOR_MENU_HL ; 边框加厚到4像素
     mov hPen, eax
     invoke SelectObject, hDC, hPen
     mov hOldPen, eax
     
-    mov rect.left, 200
-    mov rect.top, 220
-    mov rect.right, 600
-    mov rect.bottom, 420
-    invoke CreateSolidBrush, 00101010h
+    ; 2. 绘制内部填充 (使用全黑，彻底消除白色)
+    invoke CreateSolidBrush, 00000000h ; 纯黑色背景
     mov hBrush, eax
-    invoke FillRect, hDC, addr rect, hBrush
-    invoke DeleteObject, hBrush
-    invoke RoundRect, hDC, 200, 220, 600, 420, 20, 20
+    invoke SelectObject, hDC, hBrush ; 关键：必须把画刷选入DC才能消除白色填充
     
+    ; 3. 绘制矩形 (使用Rectangle代替RoundRect，更显硬朗)
+    invoke Rectangle, hDC, 200, 220, 600, 440 
+    
+    ; 清理资源
+    invoke DeleteObject, hBrush
     invoke SelectObject, hDC, hOldPen
     invoke DeleteObject, hPen
     
@@ -416,24 +419,23 @@ DrawMenu proc hDC:DWORD
     .if menuSelection == MENU_START
         invoke SetTextColor, hDC, COLOR_MENU_HL
     .else
-        invoke SetTextColor, hDC, 00A0A0A0h
+        invoke SetTextColor, hDC, 00808080h ; 建议改为深灰，更有街机感
     .endif
-    invoke TextOut, hDC, 270, textY, addr szMenuItem1, 13
+    invoke TextOut, hDC, 220, textY, addr szMenuItem1, 13 ; 从 270 修改为 220
     
     ; MODE
     add textY, 45
     .if menuSelection == MENU_MODE
         invoke SetTextColor, hDC, COLOR_MENU_HL
     .else
-        invoke SetTextColor, hDC, 00A0A0A0h
+        invoke SetTextColor, hDC, 00808080h
     .endif
-    invoke TextOut, hDC, 270, textY, addr szMenuItem2, 9
+    invoke TextOut, hDC, 220, textY, addr szMenuItem2, 9 ; 修改为 220
     
-    ; 显示当前模式
-    .if gameMode == MODE_PVP
-        invoke TextOut, hDC, 430, textY, addr szModePVP, 3
-    .else
-        invoke TextOut, hDC, 430, textY, addr szModePVE, 10
+    ; 显示当前模式 (根据文字缩进，将模式显示也相应左移)
+    invoke TextOut, hDC, 350, textY, addr szModePVP, 3 ; 从 430 移至 350
+    .if gameMode != MODE_PVP
+        invoke TextOut, hDC, 350, textY, addr szModePVE, 10
     .endif
     
     ; DIFFICULTY (仅在PVE模式显示)
@@ -442,17 +444,17 @@ DrawMenu proc hDC:DWORD
         .if menuSelection == MENU_DIFFICULTY
             invoke SetTextColor, hDC, COLOR_MENU_HL
         .else
-            invoke SetTextColor, hDC, 00A0A0A0h
+            invoke SetTextColor, hDC, 00808080h
         .endif
-        invoke TextOut, hDC, 270, textY, addr szMenuItem3, 15
+        invoke TextOut, hDC, 220, textY, addr szMenuItem3, 15 ; 修改为 220
         
-        ; 显示当前难度
+        ; 显示当前难度 (从 550 移至 480，给长字符串留出空间)
         .if aiDifficulty == AI_EASY
-            invoke TextOut, hDC, 550, textY, addr szDiffEasy, 4
+            invoke TextOut, hDC, 480, textY, addr szDiffEasy, 4
         .elseif aiDifficulty == AI_MEDIUM
-            invoke TextOut, hDC, 550, textY, addr szDiffMedium, 6
+            invoke TextOut, hDC, 480, textY, addr szDiffMedium, 6
         .else
-            invoke TextOut, hDC, 550, textY, addr szDiffHard, 4
+            invoke TextOut, hDC, 480, textY, addr szDiffHard, 4
         .endif
     .endif
     
@@ -461,9 +463,9 @@ DrawMenu proc hDC:DWORD
     .if menuSelection == MENU_QUIT
         invoke SetTextColor, hDC, COLOR_MENU_HL
     .else
-        invoke SetTextColor, hDC, 00A0A0A0h
+        invoke SetTextColor, hDC, 00808080h
     .endif
-    invoke TextOut, hDC, 270, textY, addr szMenuItem4, 7
+    invoke TextOut, hDC, 220, textY, addr szMenuItem4, 7 ; 修改为 220
     
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
@@ -476,13 +478,13 @@ DrawMenu proc hDC:DWORD
     invoke SelectObject, hDC, hFont
     invoke SetTextColor, hDC, 000000FFh  ; 红色
     
-    mov heartX, 220
+    mov heartX, 180 ; 原本是 220，现在配合文字左移到 180
     mov eax, menuSelection
     imul eax, 45
     add eax, 245
     mov heartY, eax
     
-    ; 心跳动画
+    ; 心跳动画逻辑保持
     mov eax, heartBeat
     .if eax < 30
         sub heartX, 5
