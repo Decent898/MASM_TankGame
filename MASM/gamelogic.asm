@@ -117,8 +117,170 @@ InitMap proc
     mov map[eax*4], 0
     mov eax, 13 * MAP_COLS + 18
     mov map[eax*4], 0
+    
+    ; 检查连通性，如果不连通则重新生成
+    invoke CheckMapConnectivity
+    .if eax == 0
+        ; 不连通，递归重新生成
+        invoke InitMap
+    .endif
     ret
 InitMap endp
+
+; --- 检查地图连通性（BFS）---
+CheckMapConnectivity proc uses esi edi
+    LOCAL queue[400]:DWORD          ; BFS队列（最大400个位置）
+    LOCAL visited[400]:DWORD        ; 访问标记数组
+    LOCAL queueFront:DWORD          ; 队列前指针
+    LOCAL queueRear:DWORD           ; 队列后指针
+    LOCAL current:DWORD             ; 当前位置
+    LOCAL row:DWORD, col:DWORD
+    LOCAL newRow:DWORD, newCol:DWORD
+    LOCAL newPos:DWORD
+    LOCAL target:DWORD              ; 目标位置
+    LOCAL i:DWORD
+    
+    ; 初始化visited数组
+    lea edi, visited
+    mov ecx, 400
+    xor eax, eax
+    rep stosd
+    
+    ; 起点：玩家1位置 (1, 1)
+    mov eax, 1
+    imul eax, MAP_COLS
+    add eax, 1
+    mov current, eax
+    
+    ; 终点：玩家2位置 (13, 18)
+    mov eax, 13
+    imul eax, MAP_COLS
+    add eax, 18
+    mov target, eax
+    
+    ; 初始化队列
+    mov queueFront, 0
+    mov queueRear, 0
+    
+    ; 将起点加入队列
+    mov eax, current
+    mov queue[0], eax
+    mov visited[eax*4], 1
+    inc queueRear
+    
+    ; BFS循环
+    .while TRUE
+        ; 检查队列是否为空
+        mov eax, queueFront
+        cmp eax, queueRear
+        jge @NotConnected
+        
+        ; 取出队首元素
+        mov eax, queueFront
+        mov edx, queue[eax*4]
+        mov current, edx
+        inc queueFront
+        
+        ; 检查是否到达目标
+        mov eax, current
+        .if eax == target
+            mov eax, 1              ; 连通
+            ret
+        .endif
+        
+        ; 计算当前行列
+        xor edx, edx
+        mov eax, current
+        mov ecx, MAP_COLS
+        div ecx
+        mov row, eax
+        mov col, edx
+        
+        ; 尝试四个方向：上、下、左、右
+        
+        ; 上 (row-1, col)
+        mov eax, row
+        .if eax > 0
+            dec eax
+            mov newRow, eax
+            mov eax, col
+            mov newCol, eax
+            invoke TryVisit, newRow, newCol, addr visited, addr queue, addr queueRear
+        .endif
+        
+        ; 下 (row+1, col)
+        mov eax, row
+        inc eax
+        .if eax < MAP_ROWS
+            mov newRow, eax
+            mov eax, col
+            mov newCol, eax
+            invoke TryVisit, newRow, newCol, addr visited, addr queue, addr queueRear
+        .endif
+        
+        ; 左 (row, col-1)
+        mov eax, col
+        .if eax > 0
+            dec eax
+            mov newCol, eax
+            mov eax, row
+            mov newRow, eax
+            invoke TryVisit, newRow, newCol, addr visited, addr queue, addr queueRear
+        .endif
+        
+        ; 右 (row, col+1)
+        mov eax, col
+        inc eax
+        .if eax < MAP_COLS
+            mov newCol, eax
+            mov eax, row
+            mov newRow, eax
+            invoke TryVisit, newRow, newCol, addr visited, addr queue, addr queueRear
+        .endif
+    .endw
+    
+@NotConnected:
+    xor eax, eax                    ; 不连通
+    ret
+CheckMapConnectivity endp
+
+; --- BFS辅助函数：尝试访问一个位置 ---
+TryVisit proc uses esi row:DWORD, col:DWORD, pVisited:DWORD, pQueue:DWORD, pQueueRear:DWORD
+    LOCAL pos:DWORD
+    
+    ; 计算位置索引
+    mov eax, row
+    imul eax, MAP_COLS
+    add eax, col
+    mov pos, eax
+    
+    ; 检查是否已访问
+    mov esi, pVisited
+    mov eax, pos
+    cmp DWORD PTR [esi + eax*4], 1
+    je @Skip
+    
+    ; 检查是否是墙
+    mov eax, pos
+    cmp map[eax*4], 1
+    je @Skip
+    
+    ; 标记为已访问
+    mov esi, pVisited
+    mov eax, pos
+    mov DWORD PTR [esi + eax*4], 1
+    
+    ; 加入队列
+    mov esi, pQueueRear
+    mov eax, [esi]                  ; queueRear的值
+    mov edi, pQueue
+    mov edx, pos
+    mov [edi + eax*4], edx
+    inc DWORD PTR [esi]             ; queueRear++
+    
+@Skip:
+    ret
+TryVisit endp
 
 ; --- 检查是否是墙 ---
 IsWall proc x_fixed:DWORD, y_fixed:DWORD
@@ -159,52 +321,142 @@ WallHit:
     ret
 IsWall endp
 
-; --- 检查坦克是否可以移动 ---
-CanMove proc targetX:DWORD, targetY:DWORD
-    LOCAL r:DWORD
-    mov r, TANK_HALF_W * SCALE
-
-    ; 检查四个角
-    mov eax, targetX
-    sub eax, r
-    mov ecx, targetY
-    sub ecx, r
-    invoke IsWall, eax, ecx
+; --- 检查坦克是否可以移动（考虑旋转）---
+CanMove proc targetX:DWORD, targetY:DWORD, angle:DWORD
+    LOCAL corner_x:DWORD, corner_y:DWORD
+    LOCAL cos_val:SDWORD, sin_val:SDWORD
+    LOCAL local_x:SDWORD, local_y:SDWORD
+    LOCAL rot_x:SDWORD, rot_y:SDWORD
+    
+    ; 获取旋转角度的sin/cos值
+    mov edx, angle
+    mov eax, cosTable[edx*4]
+    mov cos_val, eax
+    mov eax, sinTable[edx*4]
+    mov sin_val, eax
+    
+    ; ========== 左上角 (-TANK_HALF_W, -TANK_HALF_H) ==========
+    mov local_x, -TANK_HALF_W
+    mov local_y, -TANK_HALF_H
+    
+    ; rot_x = local_x * cos - local_y * sin
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8              ; 除以256
+    shl eax, 8              ; 转换为定点数
+    add eax, targetX
+    mov corner_x, eax
+    
+    ; rot_y = local_x * sin + local_y * cos
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8              ; 除以256
+    shl eax, 8              ; 转换为定点数
+    add eax, targetY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
     .if eax == 1
         mov eax, 0
         ret
     .endif
-
-    mov eax, targetX
-    add eax, r
-    mov ecx, targetY
-    sub ecx, r
-    invoke IsWall, eax, ecx
+    
+    ; ========== 右上角 (+TANK_HALF_W, -TANK_HALF_H) ==========
+    mov local_x, TANK_HALF_W
+    mov local_y, -TANK_HALF_H
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, targetX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, targetY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
     .if eax == 1
         mov eax, 0
         ret
     .endif
-
-    mov eax, targetX
-    sub eax, r
-    mov ecx, targetY
-    add ecx, r
-    invoke IsWall, eax, ecx
+    
+    ; ========== 左下角 (-TANK_HALF_W, +TANK_HALF_H) ==========
+    mov local_x, -TANK_HALF_W
+    mov local_y, TANK_HALF_H
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, targetX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, targetY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
     .if eax == 1
         mov eax, 0
         ret
     .endif
-
-    mov eax, targetX
-    add eax, r
-    mov ecx, targetY
-    add ecx, r
-    invoke IsWall, eax, ecx
+    
+    ; ========== 右下角 (+TANK_HALF_W, +TANK_HALF_H) ==========
+    mov local_x, TANK_HALF_W
+    mov local_y, TANK_HALF_H
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, targetX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, targetY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
     .if eax == 1
         mov eax, 0
         ret
     .endif
-
+    
     mov eax, 1
     ret
 CanMove endp
@@ -269,7 +521,7 @@ UpdateGame proc
         add eax, p1.pos_y
         mov nextY, eax
 
-        invoke CanMove, nextX, nextY
+        invoke CanMove, nextX, nextY, p1.angle
         .if eax == 1
             mov eax, nextX
             mov p1.pos_x, eax
@@ -338,7 +590,7 @@ UpdateGame proc
         add eax, p2.pos_y
         mov nextY, eax
 
-        invoke CanMove, nextX, nextY
+        invoke CanMove, nextX, nextY, p2.angle
         .if eax == 1
             mov eax, nextX
             mov p2.pos_x, eax
