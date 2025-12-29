@@ -324,47 +324,52 @@ DrawMenu proc hDC:DWORD
     invoke DeleteObject, hFont
     
     ; === 菜单项字体 ===
-    invoke CreateFont, 36, 0, 0, 0, FW_BOLD, 0, 0, 0, \
-           DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, \
-           DEFAULT_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL
-    mov hFont, eax
-    invoke SelectObject, hDC, hFont
-    
-    ; 菜单项背景框
-    invoke CreatePen, PS_SOLID, 2, 00404040h
+    ; 1. 绘制高亮边框 (跟随选中项)
+    ; 使用金色画笔
+    invoke CreatePen, PS_SOLID, 2, 0000D7FFh  ; 金色
     mov hPen, eax
     invoke SelectObject, hDC, hPen
     mov hOldPen, eax
     
-    mov rect.left, 240
-    mov rect.top, 240
-    mov rect.right, 560
-    mov rect.bottom, 360
-    invoke CreateSolidBrush, 00101010h
-    mov hBrush, eax
-    invoke FillRect, hDC, addr rect, hBrush
-    invoke DeleteObject, hBrush
-    invoke RoundRect, hDC, 240, 240, 560, 360, 20, 20
+    ; 使用空心画刷 (透明内部)
+    invoke GetStockObject, NULL_BRUSH
+    invoke SelectObject, hDC, eax
     
+    ; 根据当前选择绘制边框
+    .if menuSelection == MENU_START
+        ; 包裹 "START GAME" 的矩形
+        invoke Rectangle, hDC, 280, 260, 520, 310
+    .else
+        ; 包裹 "QUIT GAME" 的矩形
+        invoke Rectangle, hDC, 280, 315, 520, 365
+    .endif
+    
+    ; 恢复画笔
     invoke SelectObject, hDC, hOldPen
     invoke DeleteObject, hPen
     
+    ; 2. 绘制文字
+    invoke SetBkMode, hDC, TRANSPARENT
     mov textY, 265
     
     ; START GAME
     .if menuSelection == MENU_START
-        invoke SetTextColor, hDC, COLOR_MENU_HL
+        ; 选中：亮金色
+        invoke SetTextColor, hDC, 0000D7FFh
     .else
-        invoke SetTextColor, hDC, 00A0A0A0h
+        ; 未选中：暗灰色
+        invoke SetTextColor, hDC, 00606060h
     .endif
     invoke TextOut, hDC, 300, textY, addr szMenuItem1, 13
     
     ; QUIT
     add textY, 55
     .if menuSelection == MENU_QUIT
-        invoke SetTextColor, hDC, COLOR_MENU_HL
+        ; 选中：亮金色
+        invoke SetTextColor, hDC, 0000D7FFh
     .else
-        invoke SetTextColor, hDC, 00A0A0A0h
+        ; 未选中：暗灰色
+        invoke SetTextColor, hDC, 00606060h
     .endif
     invoke TextOut, hDC, 300, textY, addr szMenuItem2, 7
     
