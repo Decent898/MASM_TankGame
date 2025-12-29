@@ -2,38 +2,96 @@
 ; AI.asm - AI对手逻辑
 ; ========================================
 
+; --- AI卡死检测 ---
+.data
+aiStuckCounter dd 0
+aiLastX dd 0
+aiLastY dd 0
+
+.code
+
 ; --- 更新 AI 行为 ---
 UpdateAI proc
-    LOCAL dx:SDWORD, dy:SDWORD
+    LOCAL delta_x:SDWORD, delta_y:SDWORD
     LOCAL distance:DWORD
     LOCAL targetAngle:DWORD
     LOCAL angleDiff:SDWORD
     LOCAL speed:SDWORD
     LOCAL nextX:DWORD, nextY:DWORD
     LOCAL shouldFire:DWORD
+    LOCAL posChanged:DWORD
     
     .if aiEnabled == 0 || p2.active == 0 || p1.active == 0
         ret
     .endif
     
-    ; ========== 计算到玩家的距离和方向 ==========
-    mov eax, p1.pos_x
-    sub eax, p2.pos_x
-    sar eax, 8                  ; 转换为实际像素
-    mov dx, eax
-    
-    mov eax, p1.pos_y
-    sub eax, p2.pos_y
-    sar eax, 8
-    mov dy, eax
-    
-    ; 计算距离（曼哈顿距离）
-    mov eax, dx
+    ; ========== 检测是否卡死 ==========
+    mov posChanged, 0
+    mov eax, p2.pos_x
+    mov ebx, aiLastX
+    sub eax, ebx
     test eax, eax
     .if SIGN?
         neg eax
     .endif
-    mov ebx, dy
+    .if eax > 5 * SCALE
+        mov posChanged, 1
+    .endif
+    
+    .if posChanged == 0
+        mov eax, p2.pos_y
+        mov ebx, aiLastY
+        sub eax, ebx
+        test eax, eax
+        .if SIGN?
+            neg eax
+        .endif
+        .if eax > 5 * SCALE
+            mov posChanged, 1
+        .endif
+    .endif
+    
+    .if posChanged == 1
+        ; 位置改变了，重置卡死计数器
+        mov aiStuckCounter, 0
+    .else
+        ; 位置没变，增加卡死计数
+        inc aiStuckCounter
+        .if aiStuckCounter > 30
+            ; 卡死超过30帧，强制随机转向并尝试移动
+            invoke crt_rand
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p2.angle, edx
+            mov aiStuckCounter, 0
+        .endif
+    .endif
+    
+    ; 保存当前位置
+    mov eax, p2.pos_x
+    mov aiLastX, eax
+    mov eax, p2.pos_y
+    mov aiLastY, eax
+    
+    ; ========== 计算到玩家的距离和方向 ==========
+    mov eax, p1.pos_x
+    sub eax, p2.pos_x
+    sar eax, 8                  ; 转换为实际像素
+    mov delta_x, eax
+    
+    mov eax, p1.pos_y
+    sub eax, p2.pos_y
+    sar eax, 8
+    mov delta_y, eax
+    
+    ; 计算距离（曼哈顿距离）
+    mov eax, delta_x
+    test eax, eax
+    .if SIGN?
+        neg eax
+    .endif
+    mov ebx, delta_y
     test ebx, ebx
     .if SIGN?
         neg ebx
@@ -63,36 +121,42 @@ UpdateAI proc
     .endif
     
     ; ========== 计算目标角度 ==========
-    invoke CalculateAngleToTarget, dx, dy
+    invoke CalculateAngleToTarget, delta_x, delta_y
     mov targetAngle, eax
     
     ; ========== 转向目标 ==========
     mov eax, targetAngle
-    movsx ebx, WORD PTR p2.angle
+    mov ebx, p2.angle
     sub eax, ebx
     
-    ; 标准化角度差 (-180 到 180)
-    .if eax > 180
-        sub eax, 360
-    .elseif eax < -180
-        add eax, 360
-    .endif
+    ; 标准化角度差 (-180 到 180) - 简化逻辑
+    cmp eax, 180
+    jle @@check_neg_turn
+    sub eax, 360
+    jmp @@norm_done_turn
+@@check_neg_turn:
+    cmp eax, -180
+    jge @@norm_done_turn
+    add eax, 360
+@@norm_done_turn:
     mov angleDiff, eax
     
     ; 根据角度差决定旋转方向
     .if angleDiff > 5
         mov eax, p2.angle
         add eax, ROT_SPEED
-        .if eax >= 360
-            sub eax, 360
-        .endif
+        cmp eax, 360
+        jl @@angle_ok1
+        sub eax, 360
+@@angle_ok1:
         mov p2.angle, eax
     .elseif angleDiff < -5
         mov eax, p2.angle
         sub eax, ROT_SPEED
-        .if SIGN?
-            add eax, 360
-        .endif
+        cmp eax, 0
+        jge @@angle_ok2
+        add eax, 360
+@@angle_ok2:
         mov p2.angle, eax
     .endif
     
@@ -101,42 +165,38 @@ UpdateAI proc
     
     mov eax, aiDifficulty
     .if eax == AI_EASY
-        ; 简单：只要距离>100就前进
-        .if distance > 100
+        ; 简单：距离太近就后退（<50），否则前进
+        .if distance < 50
+            mov speed, -TANK_SPEED
+        .else
             mov speed, TANK_SPEED
         .endif
     .elseif eax == AI_MEDIUM
-        ; 中等：保持合理距离
-        .if distance > 180
-            mov speed, TANK_SPEED
-        .elseif distance < 80
+        ; 中等：稍微灵活，距离很近后退，否则前进
+        .if distance < 60
             mov speed, -TANK_SPEED
         .else
-            ; 中等距离，小幅度移动
+            ; 70%概率前进，30%概率停止
             invoke crt_rand
             xor edx, edx
-            mov ecx, 3
+            mov ecx, 10
             div ecx
-            .if edx == 0
-                mov speed, TANK_SPEED / 2
+            .if edx < 7
+                mov speed, TANK_SPEED
             .endif
         .endif
     .else
-        ; 困难：智能走位
-        .if distance > 200
-            mov speed, TANK_SPEED
-        .elseif distance < 60
+        ; 困难：主动进攻，距离非常近才后退
+        .if distance < 40
             mov speed, -TANK_SPEED
         .else
-            ; 横向移动策略
+            ; 80%概率前进，20%概率停止
             invoke crt_rand
             xor edx, edx
-            mov ecx, 4
+            mov ecx, 10
             div ecx
-            .if edx == 0
+            .if edx < 8
                 mov speed, TANK_SPEED
-            .elseif edx == 1
-                mov speed, -TANK_SPEED
             .endif
         .endif
     .endif
@@ -192,59 +252,90 @@ UpdateAI proc
         ret
     .endif
     
+    ; ========== 视线检查：只在能直接看到玩家时射击 ==========
+    invoke CheckLineOfSight
+    .if eax == 0
+        ; 视线被遮挡，不射击（避免需要反弹）
+        ret
+    .endif
+    
+    ; ========== 视线清晰时的安全检查 ==========
+    ; 视线清晰说明中间没有墙，但还要检查前方4格是否安全
+    invoke CheckWallAhead
+    .if eax == 1
+        ; 前方有近距离墙壁，不射击
+        ret
+    .endif
+    
+    ; ========== 视线清晰时不需要检查正方向角度限制，可以直接瞄准 ==========
+    ; （如果视线清晰，说明子弹不需要反弹就能击中目标）
+    
+    ; 重新计算当前角度与目标角度的差值用于射击判断
+    mov eax, targetAngle
+    mov ebx, p2.angle
+    sub eax, ebx
+    
+    ; 标准化角度差 (-180 到 180)
+    cmp eax, 180
+    jle @@check_negative
+    sub eax, 360
+    jmp @@norm_done
+@@check_negative:
+    cmp eax, -180
+    jge @@norm_done
+    add eax, 360
+@@norm_done:
+    mov angleDiff, eax
+    
     mov shouldFire, 0
     
-    ; 根据难度决定射击频率
+    ; 根据难度决定射击频率（更主动，放宽角度要求）
     mov eax, aiDifficulty
     .if eax == AI_EASY
-        ; 简单：距离近 + 角度大致对准 + 随机因子
-        .if distance < 250
-            mov eax, angleDiff
-            test eax, eax
-            .if SIGN?
-                neg eax
-            .endif
-            .if eax < 20
-                invoke crt_rand
-                xor edx, edx
-                mov ecx, 25
-                div ecx
-                .if edx == 0
-                    mov shouldFire, 1
-                .endif
-            .endif
-        .endif
-    .elseif eax == AI_MEDIUM
-        ; 中等：角度较准就射
-        .if distance < 300
-            mov eax, angleDiff
-            test eax, eax
-            .if SIGN?
-                neg eax
-            .endif
-            .if eax < 12
-                invoke crt_rand
-                xor edx, edx
-                mov ecx, 8
-                div ecx
-                .if edx < 2
-                    mov shouldFire, 1
-                .endif
-            .endif
-        .endif
-    .else
-        ; 困难：精确瞄准
+        ; 简单：角度容差大（30度），低频率（10%）
         mov eax, angleDiff
         test eax, eax
         .if SIGN?
             neg eax
         .endif
-        .if eax < 8
+        .if eax < 30
             invoke crt_rand
             xor edx, edx
-            mov ecx, 5
+            mov ecx, 30
             div ecx
             .if edx < 3
+                mov shouldFire, 1
+            .endif
+        .endif
+    .elseif eax == AI_MEDIUM
+        ; 中等：角度容差中（20度），中频率（20%）
+        mov eax, angleDiff
+        test eax, eax
+        .if SIGN?
+            neg eax
+        .endif
+        .if eax < 20
+            invoke crt_rand
+            xor edx, edx
+            mov ecx, 25
+            div ecx
+            .if edx < 5
+                mov shouldFire, 1
+            .endif
+        .endif
+    .else
+        ; 困难：角度容差小（15度），高频率（35%）
+        mov eax, angleDiff
+        test eax, eax
+        .if SIGN?
+            neg eax
+        .endif
+        .if eax < 15
+            invoke crt_rand
+            xor edx, edx
+            mov ecx, 20
+            div ecx
+            .if edx < 7
                 mov shouldFire, 1
             .endif
         .endif
@@ -258,7 +349,7 @@ UpdateAI proc
 UpdateAI endp
 
 ; --- 计算到目标的角度 ---
-CalculateAngleToTarget proc dx:SDWORD, dy:SDWORD
+CalculateAngleToTarget proc delta_x:SDWORD, delta_y:SDWORD
     LOCAL bestAngle:DWORD
     LOCAL i:DWORD
     LOCAL maxDot:SDWORD
@@ -269,26 +360,27 @@ CalculateAngleToTarget proc dx:SDWORD, dy:SDWORD
     mov i, 0
     
     .while i < 360
-        ; 计算点积：cos(angle)*dx + sin(angle)*dy
-        mov edx, i
-        mov eax, cosTable[edx*4]
+        ; 计算点积：cos(angle)*delta_x + sin(angle)*delta_y
+        mov ecx, i
+        mov eax, cosTable[ecx*4]
         sar eax, 8
-        imul eax, dx
+        imul delta_x
         mov currentDot, eax
         
-        mov edx, i
-        mov eax, sinTable[edx*4]
+        mov ecx, i
+        mov eax, sinTable[ecx*4]
         sar eax, 8
-        imul eax, dy
+        imul delta_y
         add currentDot, eax
         
         ; 找最大点积
         mov eax, currentDot
-        .if eax > maxDot
-            mov maxDot, eax
-            mov eax, i
-            mov bestAngle, eax
-        .endif
+        cmp eax, maxDot
+        jle @@skip
+        mov maxDot, eax
+        mov eax, i
+        mov bestAngle, eax
+@@skip:
         
         add i, 5
     .endw
@@ -300,7 +392,7 @@ CalculateAngleToTarget endp
 ; --- 检查危险子弹 ---
 CheckDangerousBullets proc uses esi
     LOCAL i:DWORD
-    LOCAL dx:SDWORD, dy:SDWORD
+    LOCAL delta_x:SDWORD, delta_y:SDWORD
     LOCAL dist:DWORD
     
     mov i, 0
@@ -312,13 +404,14 @@ CheckDangerousBullets proc uses esi
         mov eax, (BULLET PTR [esi]).active
         .if eax != 0
             ; 检查是否是玩家1的子弹
-            lea eax, p1
-            .if (BULLET PTR [esi]).owner == eax
+            lea edx, p1
+            mov eax, (BULLET PTR [esi]).owner
+            .if eax == edx
                 ; 计算距离
                 mov eax, (BULLET PTR [esi]).pos_x
                 sub eax, p2.pos_x
                 sar eax, 8
-                mov dx, eax
+                mov delta_x, eax
                 test eax, eax
                 .if SIGN?
                     neg eax
@@ -499,3 +592,223 @@ RandomMove proc
     
     ret
 RandomMove endp
+
+; --- 检查前方是否有近距离墙壁 ---
+CheckWallAhead proc
+    LOCAL checkX:DWORD, checkY:DWORD
+    LOCAL wallX:DWORD, wallY:DWORD
+    LOCAL checkDist:DWORD
+    LOCAL step:DWORD
+    
+    ; 检查前方4个格子（4 * BLOCK_SIZE）
+    mov checkDist, BLOCK_SIZE * 4
+    
+    ; 分4步检查，每格子检查一次
+    mov step, 1
+@@check_loop:
+    cmp step, 5
+    jae @@no_wall
+    
+    ; 计算检查点位置
+    mov eax, step
+    imul eax, BLOCK_SIZE
+    mov checkDist, eax
+    
+    mov edx, p2.angle
+    mov eax, cosTable[edx*4]
+    imul eax, checkDist
+    add eax, p2.pos_x
+    mov checkX, eax
+    
+    mov edx, p2.angle
+    mov eax, sinTable[edx*4]
+    imul eax, checkDist
+    add eax, p2.pos_y
+    mov checkY, eax
+    
+    ; 转换为地图坐标
+    mov eax, checkX
+    sar eax, 8
+    xor edx, edx
+    mov ecx, BLOCK_SIZE
+    div ecx
+    mov wallX, eax
+    
+    mov eax, checkY
+    sar eax, 8
+    xor edx, edx
+    mov ecx, BLOCK_SIZE
+    div ecx
+    mov wallY, eax
+    
+    ; 边界检查
+    cmp wallX, MAP_COLS
+    jae @@has_wall
+    cmp wallY, MAP_ROWS
+    jae @@has_wall
+    
+    ; 检查该位置是否是墙
+    mov eax, wallY
+    imul eax, MAP_COLS
+    add eax, wallX
+    shl eax, 2
+    lea edi, map
+    add edi, eax
+    mov eax, DWORD PTR [edi]
+    test eax, eax
+    jnz @@has_wall
+    
+    ; 继续检查下一个格子
+    inc step
+    jmp @@check_loop
+    
+@@has_wall:
+    mov eax, 1
+    ret
+    
+@@no_wall:
+    xor eax, eax
+    ret
+CheckWallAhead endp
+
+; --- 检查到玩家的视线是否清晰（无墙壁遮挡） ---
+CheckLineOfSight proc
+    LOCAL x1:SDWORD, y1:SDWORD
+    LOCAL x2:SDWORD, y2:SDWORD
+    LOCAL delta_x:SDWORD, delta_y:SDWORD
+    LOCAL steps:DWORD, i:DWORD
+    LOCAL currentX:SDWORD, currentY:SDWORD
+    LOCAL gridX:DWORD, gridY:DWORD
+    
+    ; 获取AI位置（像素）
+    mov eax, p2.pos_x
+    sar eax, 8
+    mov x1, eax
+    mov eax, p2.pos_y
+    sar eax, 8
+    mov y1, eax
+    
+    ; 获取玩家位置（像素）
+    mov eax, p1.pos_x
+    sar eax, 8
+    mov x2, eax
+    mov eax, p1.pos_y
+    sar eax, 8
+    mov y2, eax
+    
+    ; 计算方向向量
+    mov eax, x2
+    sub eax, x1
+    mov delta_x, eax
+    mov eax, y2
+    sub eax, y1
+    mov delta_y, eax
+    
+    ; 计算步数（使用曼哈顿距离）
+    mov eax, delta_x
+    test eax, eax
+    .if SIGN?
+        neg eax
+    .endif
+    mov ebx, delta_y
+    test ebx, ebx
+    .if SIGN?
+        neg ebx
+    .endif
+    add eax, ebx
+    mov steps, eax
+    
+    ; 如果距离太近，直接返回视线清晰
+    .if steps < 20
+        mov eax, 1
+        ret
+    .endif
+    
+    ; 每10像素检查一次
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    mov steps, eax
+    
+    ; 限制最大检查步数
+    .if steps > 50
+        mov steps, 50
+    .endif
+    
+    ; 使用低级循环代替.while
+    mov i, 1
+@@loop_start:
+    mov eax, i
+    cmp eax, steps
+    jae @@loop_end
+    
+    ; 计算当前检查点位置
+    mov eax, delta_x
+    mov ebx, i
+    imul ebx
+    mov ebx, steps
+    cdq
+    idiv ebx
+    add eax, x1
+    mov currentX, eax
+    
+    mov eax, delta_y
+    mov ebx, i
+    imul ebx
+    mov ebx, steps
+    cdq
+    idiv ebx
+    add eax, y1
+    mov currentY, eax
+    
+    ; 转换为地图格子坐标
+    mov eax, currentX
+    cdq
+    mov ecx, BLOCK_SIZE
+    idiv ecx
+    mov gridX, eax
+    
+    mov eax, currentY
+    cdq
+    mov ecx, BLOCK_SIZE
+    idiv ecx
+    mov gridY, eax
+    
+    ; 边界检查（检查是否为负数或超出范围）
+    mov eax, gridX
+    test eax, eax
+    js @@out_of_bounds
+    cmp eax, MAP_COLS
+    jae @@out_of_bounds
+    
+    mov eax, gridY
+    test eax, eax
+    js @@out_of_bounds
+    cmp eax, MAP_ROWS
+    jae @@out_of_bounds
+    
+    ; 检查是否有墙
+    mov eax, gridY
+    imul eax, MAP_COLS
+    add eax, gridX
+    shl eax, 2
+    lea edi, map
+    add edi, eax
+    mov eax, DWORD PTR [edi]
+    test eax, eax
+    jnz @@out_of_bounds
+    
+    ; 继续下一个检查点
+    inc i
+    jmp @@loop_start
+
+@@out_of_bounds:
+    xor eax, eax
+    ret
+
+@@loop_end:
+    
+    ; 视线清晰
+    mov eax, 1
+    ret
+CheckLineOfSight endp

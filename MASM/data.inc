@@ -46,6 +46,15 @@
     ; szShootSound db "shoot.wav", 0
     ; szHitSound   db "hit.wav", 0
     
+    ; --- 调试字符串 ---
+    szDebugAI       db "[AI] aiEnabled=%d, cooldown=%d, distance=%d", 10, 0
+    szDebugAngle    db "[AI] targetAngle=%d, p2.angle=%d, angleDiff=%d", 10, 0
+    szDebugFire     db "[AI] shouldFire=%d, difficulty=%d", 10, 0
+    szDebugDelta    db "[AI] delta_x=%d, delta_y=%d", 10, 0
+    szDebugDiff     db "[DIFF] %d - %d = %d", 10, 0
+    szDebugAfter    db "[AFTER NORM] eax=%d, readback=%d", 10, 0
+    szDebugFireChk  db "[FIRECHECK ENTERED]", 10, 0
+    
     ; --- 浮点常量 ---
     double_PI   dq 3.141592653589793
     double_180  dq 180.0
@@ -58,7 +67,6 @@
     bullets     BULLET MAX_BULLETS dup(<0,0,0,0,0,0,0>)
     
     p1          TANK <0,0,0,0,0,0>
-    p2          TANK <0,0,0,0,0,0>
     p2          TANK <0,0,0,0,0,0>
     
     ; --- 游戏状态 ---

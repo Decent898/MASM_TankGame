@@ -28,7 +28,7 @@
     <None Include="menu.asm" />
     <None Include="render.asm" />
     <None Include="audio.asm" />
-    <None Include="Tank.asm" />
+    <None Include="ai.asm" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

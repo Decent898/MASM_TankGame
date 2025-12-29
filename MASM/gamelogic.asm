@@ -2,16 +2,6 @@
 ; GameLogic.asm - 游戏核心逻辑
 ; ========================================
 
-; --- 【新增】函数原型声明 ---
-; 必须放在任何 Invoke 调用之前
-InitMap              PROTO
-CheckMapConnectivity PROTO
-TryVisit             PROTO :DWORD, :DWORD, :DWORD, :DWORD, :DWORD
-IsWall               PROTO :DWORD, :DWORD
-; 【修改】函数改名为 CheckTankMove，参数名也做了唯一化处理
-CheckTankMove        PROTO :DWORD, :DWORD, :DWORD
-FireBullet           PROTO :DWORD
-
 ; --- 初始化游戏 ---
 InitGame proc
     LOCAL i:DWORD
@@ -441,6 +431,126 @@ CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
     ; ========== 右下角 (+TANK_HALF_W, +TANK_HALF_H) ==========
     mov local_x, TANK_HALF_W
     mov local_y, TANK_HALF_H
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; ========== 上边中点 (0, -TANK_HALF_H) ==========
+    mov local_x, 0
+    mov local_y, -TANK_HALF_H
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; ========== 下边中点 (0, +TANK_HALF_H) ==========
+    mov local_x, 0
+    mov local_y, TANK_HALF_H
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; ========== 左边中点 (-TANK_HALF_W, 0) ==========
+    mov local_x, -TANK_HALF_W
+    mov local_y, 0
+    
+    mov eax, local_x
+    imul eax, cos_val
+    mov ebx, local_y
+    imul ebx, sin_val
+    sub eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destX
+    mov corner_x, eax
+    
+    mov eax, local_x
+    imul eax, sin_val
+    mov ebx, local_y
+    imul ebx, cos_val
+    add eax, ebx
+    sar eax, 8
+    shl eax, 8
+    add eax, destY
+    mov corner_y, eax
+    
+    invoke IsWall, corner_x, corner_y
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; ========== 右边中点 (+TANK_HALF_W, 0) ==========
+    mov local_x, TANK_HALF_W
+    mov local_y, 0
     
     mov eax, local_x
     imul eax, cos_val

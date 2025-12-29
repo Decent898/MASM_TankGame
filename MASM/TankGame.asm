@@ -45,6 +45,8 @@ CalculateAngleToTarget  PROTO :SDWORD, :SDWORD
 CheckDangerousBullets   PROTO
 EvadeBullet             PROTO
 RandomMove              PROTO
+CheckWallAhead          PROTO
+CheckLineOfSight        PROTO
 
 ; 菜单系统
 HandleMenuInput     PROTO
@@ -69,6 +71,9 @@ DrawOneTank     PROTO :DWORD, :DWORD
 
 ; --- 包含游戏逻辑模块 ---
 include gamelogic.asm
+
+; --- 包含AI模块 ---
+include ai.asm
 
 ; --- 包含菜单模块 ---
 include menu.asm
@@ -96,6 +101,9 @@ WinMain proc hInst:DWORD, hPrevInst:DWORD, CmdLine:DWORD, CmdShow:DWORD
     mov eax, hPrevInst
     mov eax, CmdLine
 
+    ; 创建控制台窗口用于调试输出
+    invoke AllocConsole
+    
     ; 注册窗口类
     mov wc.cbSize, sizeof WNDCLASSEX
     mov wc.style, CS_HREDRAW or CS_VREDRAW
@@ -195,6 +203,7 @@ WndProc proc hWin:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 
     .elseif uMsg == WM_DESTROY
         invoke KillTimer, hWin, TIMER_ID
+        invoke FreeConsole
         invoke PostQuitMessage, 0
 
     .else
@@ -205,11 +214,5 @@ WndProc proc hWin:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
     xor eax, eax
     ret
 WndProc endp
-
-; --- 包含游戏模块 ---
-include gamelogic.asm
-include ai.asm
-include menu.asm
-include render.asm
 
 end start
