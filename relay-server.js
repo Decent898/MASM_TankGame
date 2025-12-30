@@ -33,13 +33,14 @@ const server = net.createServer((socket) => {
     
     console.log(`[ACCEPT] Client ${playerId} accepted`);
     
-    // 通知对方有新玩家连接
-    clients.forEach((client, id) => {
-        if (id !== playerId) {
+    // 如果达到2个玩家，通知双方游戏开始
+    if (clients.size === 2) {
+        console.log(`[GAME] Both players connected! Starting game...`);
+        clients.forEach((client, id) => {
             console.log(`[NOTIFY] Sending MSG_CONNECT to player ${id}`);
             client.socket.write(Buffer.from([1, 0, 0, 0])); // MSG_CONNECT
-        }
-    });
+        });
+    }
     
     socket.on('data', (data) => {
         const msgType = data.length > 0 ? data[0] : -1;

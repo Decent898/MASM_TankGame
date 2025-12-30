@@ -40,6 +40,8 @@
     ; --- 调试信息格式 ---
     szDebugFormat     db "Mode:%d InitOK:%d LastResult:%d WSAErr:%d", 0
     szDebugBuffer     db 100 dup(0)
+    szDbgGameStart    db "[NET] MSG_CONNECT received! Starting game!", 13, 10, 0
+    szDbgCheckingMsg  db "[NET] Checking for messages (connected)...", 13, 10, 0
     
     ; --- 暂停菜单字符串 ---
     szPaused    db "= PAUSED =", 0

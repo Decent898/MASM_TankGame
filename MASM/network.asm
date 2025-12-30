@@ -20,6 +20,9 @@
     szDbgJoinConnRes db "[NET] Connect result: %d, WSAError: %d", 13, 10, 0
     szDbgJoinOK     db "[NET] Connected to relay server! (return 1)", 13, 10, 0
     szDbgJoinFail   db "[NET] Connection failed! (return 0)", 13, 10, 0
+    szDbgRecvMsg    db "[NET] Received message type: %d", 13, 10, 0
+    szDbgRecvError  db "[NET] Recv error: %d", 13, 10, 0
+    szDbgRecvResult db "[NET] Recv returned: %d bytes", 13, 10, 0
 
 .data?
     wsaData         db 400 dup(?)
@@ -274,6 +277,12 @@ ReceiveNetworkData proc
     
     invoke recv, clientSocket, addr msgBuf, 520, 0
     mov bytesRead, eax
+    
+    ; 调试：显示recv返回值
+    push eax
+    invoke crt_printf, ADDR szDbgRecvResult, eax
+    pop eax
+    
     cmp eax, -1
     je short RecvFailed
     test eax, eax
@@ -288,6 +297,9 @@ ReceiveNetworkData proc
 RecvReturn:
     lea esi, msgBuf
     mov eax, [esi]
+    push eax
+    invoke crt_printf, ADDR szDbgRecvMsg, eax
+    pop eax
     ret
     
 RecvClosed:
@@ -295,6 +307,14 @@ RecvClosed:
     ret
     
 RecvFailed:
+    invoke WSAGetLastError
+    cmp eax, 10035  ; WSAEWOULDBLOCK - 没有数据可读
+    je short RecvNoData
+    ; 其他错误
+    push eax
+    invoke crt_printf, ADDR szDbgRecvError, eax
+    pop eax
+RecvNoData:
     xor eax, eax
     ret
 ReceiveNetworkData endp

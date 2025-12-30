@@ -194,6 +194,26 @@ HandleGameInput endp
 
 ; --- 网络菜单输入处理 ---
 HandleNetworkMenuInput proc
+    ; 先检查是否已经连接成功，如果是则检查消息
+    mov eax, lastNetworkResult
+    cmp eax, 1
+    jne @CheckKeys
+    
+    ; 已连接，持续检查是否收到MSG_CONNECT（不打印调试信息）
+    call ReceiveNetworkData
+    test eax, eax  ; 检查是否收到任何消息
+    jz @CheckKeys  ; 没收到消息，继续检查按键
+    
+    cmp eax, MSG_CONNECT
+    jne @CheckKeys
+    
+    ; 收到MSG_CONNECT，开始游戏！
+    invoke crt_printf, ADDR szDbgGameStart
+    mov gameState, STATE_PLAYING
+    call InitGame
+    ret
+    
+@CheckKeys:
     invoke GetAsyncKeyState, 'H'
     test ax, 8000h
     jz @CheckJ
@@ -201,6 +221,11 @@ HandleNetworkMenuInput proc
     mov eax, menuAnimTick
     test eax, eax
     jnz @CheckJ
+    
+    ; 检查是否已经在连接
+    mov eax, lastNetworkResult
+    cmp eax, 1
+    je @HostDone
     
     ; 检查网络是否已初始化
     mov eax, networkInitOK
@@ -236,6 +261,11 @@ HandleNetworkMenuInput proc
     test eax, eax
     jnz @CheckESC
     
+    ; 检查是否已经在连接
+    mov eax, lastNetworkResult
+    cmp eax, 1
+    je @JoinDone
+    
     ; 检查网络是否已初始化
     mov eax, networkInitOK
     test eax, eax
@@ -267,11 +297,11 @@ HandleNetworkMenuInput proc
 @CheckESC:
     invoke GetAsyncKeyState, VK_ESCAPE
     test ax, 8000h
-    jz @UpdateAnim
+    jz @CheckNetworkReady
     
     mov eax, menuAnimTick
     test eax, eax
-    jnz @UpdateAnim
+    jnz @CheckNetworkReady
     
     ; 返回主菜单，清理网络状态
     call DisconnectNetwork
@@ -280,6 +310,22 @@ HandleNetworkMenuInput proc
     mov lastNetworkResult, 0
     mov gameState, STATE_MENU
     mov menuAnimTick, 20
+    jmp @UpdateAnim
+
+@CheckNetworkReady:
+    ; 如果已经连接成功，检查是否收到MSG_CONNECT（对方玩家连接）
+    mov eax, lastNetworkResult
+    cmp eax, 1
+    jne @UpdateAnim
+    
+    ; 尝试接收数据
+    call ReceiveNetworkData
+    cmp eax, 1  ; MSG_CONNECT
+    jne @UpdateAnim
+    
+    ; 收到MSG_CONNECT，两个玩家都连接了，开始游戏！
+    mov gameState, STATE_PLAYING
+    call InitGame
 
 @UpdateAnim:
     mov eax, menuAnimTick

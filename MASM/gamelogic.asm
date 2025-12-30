@@ -476,153 +476,246 @@ CheckTankMove endp
 UpdateGame proc
     LOCAL speed:DWORD
     LOCAL nextX:DWORD, nextY:DWORD
+    LOCAL oldX:DWORD, oldY:DWORD, oldAngle:DWORD
+    LOCAL msgType:DWORD
 
     .if p1.active == 0 || p2.active == 0
         ret
     .endif
 
-    ; === 玩家1控制 ===
-    invoke GetAsyncKeyState, 'A'
-    test ax, 8000h
-    .if !ZERO?
-        mov eax, p1.angle
-        sub eax, ROT_SPEED
-        add eax, 360
-        xor edx, edx
-        mov ecx, 360
-        div ecx
-        mov p1.angle, edx
-    .endif
-
-    invoke GetAsyncKeyState, 'D'
-    test ax, 8000h
-    .if !ZERO?
-        mov eax, p1.angle
-        add eax, ROT_SPEED
-        xor edx, edx
-        mov ecx, 360
-        div ecx
-        mov p1.angle, edx
-    .endif
-
-    mov speed, 0
-    invoke GetAsyncKeyState, 'W'
-    test ax, 8000h
-    .if !ZERO?
-        mov speed, TANK_SPEED
-    .endif
-    invoke GetAsyncKeyState, 'S'
-    test ax, 8000h
-    .if !ZERO?
-        mov speed, -TANK_SPEED
-    .endif
-
-    .if speed != 0
-        mov edx, p1.angle
-        mov eax, cosTable[edx*4]
-        imul eax, speed
-        sar eax, 8
-        add eax, p1.pos_x
-        mov nextX, eax
-
-        mov edx, p1.angle
-        mov eax, sinTable[edx*4]
-        imul eax, speed
-        sar eax, 8
-        add eax, p1.pos_y
-        mov nextY, eax
-
-        ; 【修改】调用新名字函数
-        invoke CheckTankMove, nextX, nextY, p1.angle
-        .if eax == 1
-            mov eax, nextX
-            mov p1.pos_x, eax
-            mov eax, nextY
-            mov p1.pos_y, eax
+    ; === 网络模式下接收对方玩家的更新 ===
+    mov eax, networkMode
+    .if eax == NET_MODE_HOST || eax == NET_MODE_CLIENT
+        call ReceiveNetworkData
+        .if eax == MSG_TANK_UPDATE
+            ; TODO: 解析收到的坦克位置并更新对方坦克
+        .elseif eax == MSG_FIRE_BULLET
+            ; TODO: 对方开火
+        .elseif eax == MSG_DISCONNECT
+            ; 对方断线，游戏结束
+            mov gameState, STATE_GAME_OVER
+            ret
         .endif
     .endif
 
-    .if p1.cooldown > 0
-        dec p1.cooldown
-    .endif
-    invoke GetAsyncKeyState, 'J'
-    test ax, 8000h
-    .if !ZERO? && p1.cooldown == 0
-        invoke FireBullet, addr p1
-    .endif
-
-    ; === 玩家2控制 ===
-    invoke GetAsyncKeyState, VK_LEFT
-    test ax, 8000h
-    .if !ZERO?
-        mov eax, p2.angle
-        sub eax, ROT_SPEED
-        add eax, 360
-        xor edx, edx
-        mov ecx, 360
-        div ecx
-        mov p2.angle, edx
-    .endif
-
-    invoke GetAsyncKeyState, VK_RIGHT
-    test ax, 8000h
-    .if !ZERO?
-        mov eax, p2.angle
-        add eax, ROT_SPEED
-        xor edx, edx
-        mov ecx, 360
-        div ecx
-        mov p2.angle, edx
-    .endif
-
-    mov speed, 0
-    invoke GetAsyncKeyState, VK_UP
-    test ax, 8000h
-    .if !ZERO?
-        mov speed, TANK_SPEED
-    .endif
-    invoke GetAsyncKeyState, VK_DOWN
-    test ax, 8000h
-    .if !ZERO?
-        mov speed, -TANK_SPEED
-    .endif
-
-    .if speed != 0
-        mov edx, p2.angle
-        mov eax, cosTable[edx*4]
-        imul eax, speed
-        sar eax, 8
-        add eax, p2.pos_x
-        mov nextX, eax
-
-        mov edx, p2.angle
-        mov eax, sinTable[edx*4]
-        imul eax, speed
-        sar eax, 8
-        add eax, p2.pos_y
-        mov nextY, eax
-
-        ; 【修改】调用新名字函数
-        invoke CheckTankMove, nextX, nextY, p2.angle
-        .if eax == 1
-            mov eax, nextX
-            mov p2.pos_x, eax
-            mov eax, nextY
-            mov p2.pos_y, eax
-        .endif
-    .endif
-
-    .if p2.cooldown > 0
-        dec p2.cooldown
-    .endif
-    
-    ; 只在menuAnimTick为0时检测射击，防止菜单Enter键误触发
-    mov eax, menuAnimTick
-    .if eax == 0
-        invoke GetAsyncKeyState, VK_RETURN
+    ; === 玩家1控制（仅限单机或Host模式）===
+    mov eax, networkMode
+    .if eax == NET_MODE_OFFLINE || eax == NET_MODE_HOST
+        ; 保存旧状态用于检测变化
+        mov eax, p1.pos_x
+        mov oldX, eax
+        mov eax, p1.pos_y
+        mov oldY, eax
+        mov eax, p1.angle
+        mov oldAngle, eax
+        
+        invoke GetAsyncKeyState, 'A'
         test ax, 8000h
-        .if !ZERO? && p2.cooldown == 0
-            invoke FireBullet, addr p2
+        .if !ZERO?
+            mov eax, p1.angle
+            sub eax, ROT_SPEED
+            add eax, 360
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p1.angle, edx
+        .endif
+
+        invoke GetAsyncKeyState, 'D'
+        test ax, 8000h
+        .if !ZERO?
+            mov eax, p1.angle
+            add eax, ROT_SPEED
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p1.angle, edx
+        .endif
+
+        mov speed, 0
+        invoke GetAsyncKeyState, 'W'
+        test ax, 8000h
+        .if !ZERO?
+            mov speed, TANK_SPEED
+        .endif
+        invoke GetAsyncKeyState, 'S'
+        test ax, 8000h
+        .if !ZERO?
+            mov speed, -TANK_SPEED
+        .endif
+
+        .if speed != 0
+            mov edx, p1.angle
+            mov eax, cosTable[edx*4]
+            imul eax, speed
+            sar eax, 8
+            add eax, p1.pos_x
+            mov nextX, eax
+
+            mov edx, p1.angle
+            mov eax, sinTable[edx*4]
+            imul eax, speed
+            sar eax, 8
+            add eax, p1.pos_y
+            mov nextY, eax
+
+            invoke CheckTankMove, nextX, nextY, p1.angle
+            .if eax == 1
+                mov eax, nextX
+                mov p1.pos_x, eax
+                mov eax, nextY
+                mov p1.pos_y, eax
+            .endif
+        .endif
+
+        ; 如果是Host且位置/角度变化了，发送网络更新
+        mov eax, networkMode
+        .if eax == NET_MODE_HOST
+            mov eax, p1.pos_x
+            mov edx, oldX
+            .if eax != edx
+                invoke SendTankUpdate, addr p1
+                jmp @SkipP1Fire
+            .endif
+            mov eax, p1.pos_y
+            mov edx, oldY
+            .if eax != edx
+                invoke SendTankUpdate, addr p1
+                jmp @SkipP1Fire
+            .endif
+            mov eax, p1.angle
+            mov edx, oldAngle
+            .if eax != edx
+                invoke SendTankUpdate, addr p1
+            .endif
+        .endif
+
+    @SkipP1Fire:
+        .if p1.cooldown > 0
+            dec p1.cooldown
+        .endif
+        invoke GetAsyncKeyState, 'J'
+        test ax, 8000h
+        .if !ZERO? && p1.cooldown == 0
+            invoke FireBullet, addr p1
+            ; Host开火，通知Client
+            mov eax, networkMode
+            .if eax == NET_MODE_HOST
+                invoke SendBulletFired, p1.pos_x, p1.pos_y, p1.angle
+            .endif
+        .endif
+    .endif
+
+    ; === 玩家2控制（仅限单机或Client模式）===
+    mov eax, networkMode
+    .if eax == NET_MODE_OFFLINE || eax == NET_MODE_CLIENT
+        ; 保存旧状态
+        mov eax, p2.pos_x
+        mov oldX, eax
+        mov eax, p2.pos_y
+        mov oldY, eax
+        mov eax, p2.angle
+        mov oldAngle, eax
+        
+        invoke GetAsyncKeyState, VK_LEFT
+        test ax, 8000h
+        .if !ZERO?
+            mov eax, p2.angle
+            sub eax, ROT_SPEED
+            add eax, 360
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p2.angle, edx
+        .endif
+
+        invoke GetAsyncKeyState, VK_RIGHT
+        test ax, 8000h
+        .if !ZERO?
+            mov eax, p2.angle
+            add eax, ROT_SPEED
+            xor edx, edx
+            mov ecx, 360
+            div ecx
+            mov p2.angle, edx
+        .endif
+
+        mov speed, 0
+        invoke GetAsyncKeyState, VK_UP
+        test ax, 8000h
+        .if !ZERO?
+            mov speed, TANK_SPEED
+        .endif
+        invoke GetAsyncKeyState, VK_DOWN
+        test ax, 8000h
+        .if !ZERO?
+            mov speed, -TANK_SPEED
+        .endif
+
+        .if speed != 0
+            mov edx, p2.angle
+            mov eax, cosTable[edx*4]
+            imul eax, speed
+            sar eax, 8
+            add eax, p2.pos_x
+            mov nextX, eax
+
+            mov edx, p2.angle
+            mov eax, sinTable[edx*4]
+            imul eax, speed
+            sar eax, 8
+            add eax, p2.pos_y
+            mov nextY, eax
+
+            invoke CheckTankMove, nextX, nextY, p2.angle
+            .if eax == 1
+                mov eax, nextX
+                mov p2.pos_x, eax
+                mov eax, nextY
+                mov p2.pos_y, eax
+            .endif
+        .endif
+
+        ; 如果是Client且位置/角度变化了，发送网络更新
+        mov eax, networkMode
+        .if eax == NET_MODE_CLIENT
+            mov eax, p2.pos_x
+            mov edx, oldX
+            .if eax != edx
+                invoke SendTankUpdate, addr p2
+                jmp @SkipP2Fire
+            .endif
+            mov eax, p2.pos_y
+            mov edx, oldY
+            .if eax != edx
+                invoke SendTankUpdate, addr p2
+                jmp @SkipP2Fire
+            .endif
+            mov eax, p2.angle
+            mov edx, oldAngle
+            .if eax != edx
+                invoke SendTankUpdate, addr p2
+            .endif
+        .endif
+
+    @SkipP2Fire:
+        .if p2.cooldown > 0
+            dec p2.cooldown
+        .endif
+        
+        ; 只在menuAnimTick为0时检测射击，防止菜单Enter键误触发
+        mov eax, menuAnimTick
+        .if eax == 0
+            invoke GetAsyncKeyState, VK_RETURN
+            test ax, 8000h
+            .if !ZERO? && p2.cooldown == 0
+                invoke FireBullet, addr p2
+                ; Client开火，通知Host
+                mov eax, networkMode
+                .if eax == NET_MODE_CLIENT
+                    invoke SendBulletFired, p2.pos_x, p2.pos_y, p2.angle
+                .endif
+            .endif
         .endif
     .endif
 
