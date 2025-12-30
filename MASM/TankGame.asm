@@ -14,12 +14,14 @@ include C:\masm32\include\kernel32.inc
 include C:\masm32\include\gdi32.inc
 include C:\masm32\include\msvcrt.inc
 include C:\masm32\include\winmm.inc
+include C:\masm32\include\ws2_32.inc
 
 includelib C:\masm32\lib\user32.lib
 includelib C:\masm32\lib\kernel32.lib
 includelib C:\masm32\lib\gdi32.lib
 includelib C:\masm32\lib\msvcrt.lib
 includelib C:\masm32\lib\winmm.lib
+includelib C:\masm32\lib\ws2_32.lib
 
 ; --- 包含项目模块 ---
 include constants.inc
@@ -36,6 +38,16 @@ UpdateGame      PROTO
 IsWall          PROTO :DWORD, :DWORD
 CanMove         PROTO :DWORD, :DWORD
 FireBullet      PROTO :DWORD
+
+; 网络功能
+InitNetwork         PROTO
+CleanupNetwork      PROTO
+HostGame            PROTO
+JoinGame            PROTO :DWORD
+SendTankUpdate      PROTO :DWORD
+ReceiveNetworkData  PROTO
+SendBulletFired     PROTO :DWORD, :DWORD, :DWORD
+DisconnectNetwork   PROTO
 
 ; 菜单系统
 HandleMenuInput     PROTO
@@ -66,6 +78,9 @@ include menu.asm
 
 ; --- 包含渲染模块 ---
 include render.asm
+
+; --- 包含网络模块 ---
+include network.asm
 
 ; ========================================
 ; 程序入口
@@ -149,6 +164,8 @@ WndProc proc hWin:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
         mov eax, gameState
         .if eax == STATE_MENU
             invoke HandleMenuInput
+        .elseif eax == STATE_NETWORK_MENU
+            invoke HandleNetworkMenuInput
         .elseif eax == STATE_PLAYING
             invoke UpdateGame
             invoke HandleGameInput

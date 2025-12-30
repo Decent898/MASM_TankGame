@@ -26,7 +26,7 @@ HandleMenuInput proc
     mov eax, menuAnimTick
     .if eax == 0
         inc menuSelection
-        .if menuSelection > 1
+        .if menuSelection > MENU_QUIT
             mov menuSelection, 0
         .endif
         mov menuAnimTick, 10
@@ -41,10 +41,20 @@ HandleMenuInput proc
     .if eax == 0
         mov eax, menuSelection
         .if eax == MENU_START
-            ; 开始游戏
+            ; 开始本地对战游戏
             mov gameState, STATE_PLAYING
+            mov networkMode, NET_MODE_OFFLINE
             call InitGame
-            ; 设置更长延迟防止Enter键立即触发射击
+            mov menuAnimTick, 30
+            jmp @UpdateAnim
+        .elseif eax == MENU_NETWORK
+            ; 进入联机模式菜单
+            mov gameState, STATE_NETWORK_MENU
+            mov menuSelection, 0
+            ; 初始化网络
+            call InitNetwork
+            mov networkInitOK, eax
+            mov wsaStartupError, 0
             mov menuAnimTick, 30
             jmp @UpdateAnim
         .elseif eax == MENU_QUIT
@@ -181,6 +191,110 @@ HandleGameInput proc
     
     ret
 HandleGameInput endp
+
+; --- 网络菜单输入处理 ---
+HandleNetworkMenuInput proc
+    invoke GetAsyncKeyState, 'H'
+    test ax, 8000h
+    jz @CheckJ
+    
+    mov eax, menuAnimTick
+    test eax, eax
+    jnz @CheckJ
+    
+    ; 检查网络是否已初始化
+    mov eax, networkInitOK
+    test eax, eax
+    jnz @DoHost
+    
+    call InitNetwork
+    mov networkInitOK, eax
+    mov lastNetworkResult, eax
+    
+@DoHost:
+    mov eax, networkInitOK
+    cmp eax, 1
+    jne @HostDone
+    
+    ; 作为主机连接到服务器
+    mov networkMode, NET_MODE_HOST
+    call HostGame
+    mov lastNetworkResult, eax
+    
+    ; eax: 0=失败, 1=连接成功
+    ; 连接成功后保持在网络菜单等待对方玩家
+    
+@HostDone:
+    mov menuAnimTick, 20
+
+@CheckJ:
+    invoke GetAsyncKeyState, 'J'
+    test ax, 8000h
+    jz @CheckESC
+    
+    mov eax, menuAnimTick
+    test eax, eax
+    jnz @CheckESC
+    
+    ; 检查网络是否已初始化
+    mov eax, networkInitOK
+    test eax, eax
+    jnz @DoJoin
+    
+    call InitNetwork
+    mov networkInitOK, eax
+    mov lastNetworkResult, eax
+    
+@DoJoin:
+    mov eax, networkInitOK
+    cmp eax, 1
+    jne @JoinDone
+    
+    ; 作为客户端连接到服务器
+    mov networkMode, NET_MODE_CLIENT
+    invoke JoinGame, 0  ; 使用默认服务器地址
+    mov lastNetworkResult, eax
+    
+    cmp eax, 1
+    jne @JoinDone
+    
+    ; 连接成功，保持在网络菜单等待对方
+    ; TODO: 监听服务器的MSG_CONNECT消息
+    
+@JoinDone:
+    mov menuAnimTick, 20
+
+@CheckESC:
+    invoke GetAsyncKeyState, VK_ESCAPE
+    test ax, 8000h
+    jz @UpdateAnim
+    
+    mov eax, menuAnimTick
+    test eax, eax
+    jnz @UpdateAnim
+    
+    ; 返回主菜单，清理网络状态
+    call DisconnectNetwork
+    mov networkMode, NET_MODE_OFFLINE
+    mov networkInitOK, 0
+    mov lastNetworkResult, 0
+    mov gameState, STATE_MENU
+    mov menuAnimTick, 20
+
+@UpdateAnim:
+    mov eax, menuAnimTick
+    .if eax > 0
+        dec menuAnimTick
+    .endif
+    
+    inc heartBeat
+    mov eax, heartBeat
+    .if eax >= 60
+        mov heartBeat, 0
+    .endif
+    
+    ret
+HandleNetworkMenuInput endp
 
 ; --- 游戏结束输入处理 ---
 HandleGameOverInput proc
@@ -339,9 +453,12 @@ DrawMenu proc hDC:DWORD
     .if menuSelection == MENU_START
         ; 包裹 "START GAME" 的矩形
         invoke Rectangle, hDC, 280, 260, 520, 310
+    .elseif menuSelection == MENU_NETWORK
+        ; 包裹 "NETWORK GAME" 的矩形
+        invoke Rectangle, hDC, 280, 315, 520, 365
     .else
         ; 包裹 "QUIT GAME" 的矩形
-        invoke Rectangle, hDC, 280, 315, 520, 365
+        invoke Rectangle, hDC, 280, 370, 520, 420
     .endif
     
     ; 恢复画笔
@@ -362,6 +479,15 @@ DrawMenu proc hDC:DWORD
     .endif
     invoke TextOut, hDC, 300, textY, addr szMenuItem1, 13
     
+    ; NETWORK GAME
+    add textY, 55
+    .if menuSelection == MENU_NETWORK
+        invoke SetTextColor, hDC, 0000D7FFh
+    .else
+        invoke SetTextColor, hDC, 00606060h
+    .endif
+    invoke TextOut, hDC, 300, textY, addr szMenuItem2, 15
+    
     ; QUIT
     add textY, 55
     .if menuSelection == MENU_QUIT
@@ -371,7 +497,7 @@ DrawMenu proc hDC:DWORD
         ; 未选中：暗灰色
         invoke SetTextColor, hDC, 00606060h
     .endif
-    invoke TextOut, hDC, 300, textY, addr szMenuItem2, 7
+    invoke TextOut, hDC, 300, textY, addr szMenuItem3, 7
     
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
@@ -431,6 +557,172 @@ DrawMenu proc hDC:DWORD
     
     ret
 DrawMenu endp
+
+; --- 绘制网络菜单 ---
+DrawNetworkMenu proc hDC:DWORD
+    LOCAL hFont:DWORD
+    LOCAL hOldFont:DWORD
+    LOCAL rect:RECT
+    LOCAL hBrush:DWORD
+    LOCAL hPen:DWORD
+    LOCAL hOldPen:DWORD
+    LOCAL textY:DWORD
+    LOCAL i:DWORD
+    LOCAL statusMsg:DWORD
+    
+    ; 渐变背景
+    mov i, 0
+    .while i < WINDOW_H
+        mov eax, i
+        imul eax, 20
+        mov ecx, WINDOW_H
+        cdq
+        idiv ecx
+        shl eax, 16
+        invoke CreateSolidBrush, eax
+        mov hBrush, eax
+        mov eax, i
+        mov rect.left, 0
+        mov rect.top, eax
+        mov rect.right, WINDOW_W
+        add eax, 2
+        mov rect.bottom, eax
+        invoke FillRect, hDC, addr rect, hBrush
+        invoke DeleteObject, hBrush
+        add i, 2
+    .endw
+    
+    invoke SetBkMode, hDC, TRANSPARENT
+    
+    ; 标题
+    invoke CreateFont, 72, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, \
+           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, \
+           DEFAULT_PITCH or FF_SWISS, ADDR szArialFont
+    mov hFont, eax
+    invoke SelectObject, hDC, hFont
+    mov hOldFont, eax
+    invoke SetTextColor, hDC, COLOR_MENU_HL
+    
+    mov rect.left, 0
+    mov rect.top, 100
+    mov rect.right, WINDOW_W
+    mov rect.bottom, 200
+    invoke DrawText, hDC, ADDR szNetworkTitle, -1, ADDR rect, \
+           DT_CENTER or DT_VCENTER or DT_SINGLELINE
+    invoke DeleteObject, hFont
+    
+    ; 选项文字
+    invoke CreateFont, 36, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, \
+           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, \
+           DEFAULT_PITCH or FF_SWISS, ADDR szArialFont
+    mov hFont, eax
+    invoke SelectObject, hDC, hFont
+    invoke SetTextColor, hDC, 00FFFFFFh
+    
+    ; H - Host Game
+    mov rect.left, 0
+    mov rect.top, 250
+    mov rect.right, WINDOW_W
+    mov rect.bottom, 290
+    invoke DrawText, hDC, ADDR szHostOption, -1, ADDR rect, \
+           DT_CENTER or DT_VCENTER or DT_SINGLELINE
+    
+    ; J - Join Game  
+    mov rect.top, 310
+    mov rect.bottom, 350
+    invoke DrawText, hDC, ADDR szJoinOption, -1, ADDR rect, \
+           DT_CENTER or DT_VCENTER or DT_SINGLELINE
+    
+    ; ESC - Back
+    mov rect.top, 370
+    mov rect.bottom, 410
+    invoke DrawText, hDC, ADDR szBackOption, -1, ADDR rect, \
+           DT_CENTER or DT_VCENTER or DT_SINGLELINE
+    
+    ; 状态信息
+    invoke CreateFont, 24, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, \
+           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, \
+           DEFAULT_PITCH or FF_SWISS, ADDR szArialFont
+    invoke SelectObject, hDC, hFont
+    invoke DeleteObject, hOldFont
+    
+    ; 根据网络初始化和模式显示状态
+    mov eax, networkInitOK
+    test eax, eax
+    jnz @CheckMode
+    
+    ; 初始化失败
+    mov statusMsg, OFFSET szInitFailed
+    invoke SetTextColor, hDC, 000000FFh  ; 红色
+    jmp @DrawStatus
+    
+@CheckMode:
+    mov eax, networkMode
+    cmp eax, NET_MODE_HOST
+    je @HostMode
+    cmp eax, NET_MODE_CLIENT
+    je @ClientMode
+    
+    ; 离线模式
+    mov statusMsg, OFFSET szOfflineStatus
+    invoke SetTextColor, hDC, 00808080h
+    jmp @DrawStatus
+    
+@HostMode:
+    mov eax, lastNetworkResult
+    cmp eax, 2
+    je @HostWaiting
+    cmp eax, 1
+    je @Connected
+    
+    ; 主机连接失败
+    mov statusMsg, OFFSET szConnectFailed
+    invoke SetTextColor, hDC, 000000FFh  ; 红色
+    jmp @DrawStatus
+    
+@HostWaiting:
+    mov statusMsg, OFFSET szHostWaiting
+    invoke SetTextColor, hDC, COLOR_MENU_HL
+    jmp @DrawStatus
+    
+@ClientMode:
+    mov eax, lastNetworkResult
+    cmp eax, 1
+    je @Connected
+    
+    ; 客户端连接失败
+    mov statusMsg, OFFSET szConnectFailed
+    invoke SetTextColor, hDC, 000000FFh  ; 红色
+    jmp @DrawStatus
+    
+@Connected:
+    mov statusMsg, OFFSET szConnectSuccess
+    invoke SetTextColor, hDC, 0000FF00h  ; 绿色
+    
+@DrawStatus:
+    mov rect.top, 450
+    mov rect.bottom, 490
+    invoke DrawText, hDC, statusMsg, -1, ADDR rect, \
+           DT_CENTER or DT_VCENTER or DT_SINGLELINE
+    
+    ; 调试信息
+    invoke CreateFont, 18, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, \
+           OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, \
+           DEFAULT_PITCH or FF_SWISS, ADDR szArialFont
+    invoke SelectObject, hDC, hFont
+    invoke DeleteObject, hOldFont
+    invoke SetTextColor, hDC, 00FFFFFFh
+    
+    invoke wsprintf, ADDR szDebugBuffer, ADDR szDebugFormat, \
+           networkMode, networkInitOK, lastNetworkResult, wsaStartupError
+    mov rect.top, 510
+    mov rect.bottom, 540
+    invoke DrawText, hDC, ADDR szDebugBuffer, -1, ADDR rect, \
+           DT_CENTER or DT_VCENTER or DT_SINGLELINE
+    
+    invoke DeleteObject, hFont
+    ret
+DrawNetworkMenu endp
 
 ; --- 绘制暂停菜单 ---
 DrawPauseMenu proc hDC:DWORD

@@ -299,6 +299,8 @@ DrawGame proc hDC:DWORD
     
     .if eax == STATE_MENU
         invoke DrawMenu, hDC
+    .elseif eax == STATE_NETWORK_MENU
+        invoke DrawNetworkMenu, hDC
     .elseif eax == STATE_PLAYING
         invoke DrawGameScene, hDC
     .elseif eax == STATE_PAUSED

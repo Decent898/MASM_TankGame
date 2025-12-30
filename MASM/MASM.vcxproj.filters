@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="网络模块">
+      <UniqueIdentifier>{8A5B3C1D-9E2F-4A7B-B8C9-1D2E3F4A5B6C}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="TankGame.asm">
@@ -41,5 +44,19 @@
     <None Include="Tank.asm">
       <Filter>源文件</Filter>
     </None>
+    <None Include="network.asm">
+      <Filter>源文件</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\relay-server.js">
+      <Filter>网络模块</Filter>
+    </Text>
+    <Text Include="..\SERVER_README.md">
+      <Filter>网络模块</Filter>
+    </Text>
+    <Text Include="..\server_config.md">
+      <Filter>网络模块</Filter>
+    </Text>
   </ItemGroup>
 </Project>

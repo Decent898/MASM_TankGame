@@ -15,12 +15,31 @@
     szMenuTitle db "RETRO TANK BATTLE", 0
     szSubTitle  db "A Classic Arcade Experience", 0
     szMenuItem1 db "* START GAME", 0
-    szMenuItem2 db "* QUIT", 0
+    szMenuItem2 db "* NETWORK GAME", 0
+    szMenuItem3 db "* QUIT", 0
     szPressKey  db "Press ENTER to select", 0
     szMenuHeart db ">", 0
     szBorder1   db "=", 0
     szBorder2   db "~", 0
-    szVersion   db "v1.0 - 2025", 0
+    szVersion   db "v1.1 - Online", 0
+    
+    ; --- 网络菜单字符串 ---
+    szNetworkTitle    db "NETWORK MODE", 0
+    szHostOption      db "H - Create Game (Connect as Host)", 0
+    szJoinOption      db "J - Join Game (Connect as Client)", 0
+    szBackOption      db "ESC - Back to Menu", 0
+    szWaitingConnect  db "Waiting for other player...", 0
+    szConnecting      db "Connecting to server...", 0
+    szOfflineStatus   db "Select an option", 0
+    szConnectSuccess  db "Connected! Waiting for opponent...", 0
+    szConnectFailed   db "Connection failed! Check server status", 0
+    szInitFailed      db "Network init failed! Press ESC to return", 0
+    szHostWaiting     db "Connected to server! Waiting for opponent...", 0
+    szArialFont       db "Arial", 0
+    
+    ; --- 调试信息格式 ---
+    szDebugFormat     db "Mode:%d InitOK:%d LastResult:%d WSAErr:%d", 0
+    szDebugBuffer     db 100 dup(0)
     
     ; --- 暂停菜单字符串 ---
     szPaused    db "= PAUSED =", 0
@@ -57,6 +76,13 @@
     gameState       dd STATE_MENU
     menuSelection   dd MENU_START
     pauseSelection  dd 0
+    
+    ; --- 网络状态 ---
+    networkMode       dd NET_MODE_OFFLINE
+    isNetworkReady    dd 0
+    networkInitOK     dd 0
+    lastNetworkResult dd 0
+    wsaStartupError   dd 0
     
     ; --- 菜单动画 ---
     menuAnimTick    dd 0

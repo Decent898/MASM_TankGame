@@ -28,7 +28,13 @@
     <None Include="menu.asm" />
     <None Include="render.asm" />
     <None Include="audio.asm" />
+    <None Include="network.asm" />
     <None Include="Tank.asm" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\relay-server.js" />
+    <Text Include="..\SERVER_README.md" />
+    <Text Include="..\server_config.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
