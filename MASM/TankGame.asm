@@ -47,6 +47,7 @@ JoinGame            PROTO :DWORD
 SendTankUpdate      PROTO :DWORD
 ReceiveNetworkData  PROTO
 SendBulletFired     PROTO :DWORD, :DWORD, :DWORD
+SendMapData         PROTO
 DisconnectNetwork   PROTO
 
 ; 菜单系统

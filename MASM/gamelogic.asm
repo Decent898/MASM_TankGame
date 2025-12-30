@@ -488,9 +488,65 @@ UpdateGame proc
     .if eax == NET_MODE_HOST || eax == NET_MODE_CLIENT
         call ReceiveNetworkData
         .if eax == MSG_TANK_UPDATE
-            ; TODO: 解析收到的坦克位置并更新对方坦克
+            ; 解析收到的坦克位置并更新对方坦克
+            lea esi, netRecvBuffer
+            add esi, 8  ; 跳过msgType(4) + dataLen(4)
+            
+            ; 根据模式决定更新哪个坦克
+            mov eax, networkMode
+            .if eax == NET_MODE_HOST
+                ; Host收到Client (P2)的更新
+                mov eax, [esi]      ; pos_x
+                mov p2.pos_x, eax
+                mov eax, [esi+4]    ; pos_y
+                mov p2.pos_y, eax
+                mov eax, [esi+8]    ; angle
+                mov p2.angle, eax
+            .else
+                ; Client收到Host (P1)的更新
+                mov eax, [esi]      ; pos_x
+                mov p1.pos_x, eax
+                mov eax, [esi+4]    ; pos_y
+                mov p1.pos_y, eax
+                mov eax, [esi+8]    ; angle
+                mov p1.angle, eax
+            .endif
         .elseif eax == MSG_FIRE_BULLET
-            ; TODO: 对方开火
+            ; 对方开火，创建子弹
+            lea esi, netRecvBuffer
+            add esi, 8  ; 跳过msgType(4) + dataLen(4)
+            
+            ; 根据模式决定是哪个坦克开火
+            mov eax, networkMode
+            .if eax == NET_MODE_HOST
+                ; Host收到Client (P2)的开火
+                mov eax, [esi]      ; pos_x
+                mov p2.pos_x, eax
+                mov eax, [esi+4]    ; pos_y
+                mov p2.pos_y, eax
+                mov eax, [esi+8]    ; angle
+                mov p2.angle, eax
+                invoke FireBullet, addr p2
+            .else
+                ; Client收到Host (P1)的开火
+                mov eax, [esi]      ; pos_x
+                mov p1.pos_x, eax
+                mov eax, [esi+4]    ; pos_y
+                mov p1.pos_y, eax
+                mov eax, [esi+8]    ; angle
+                mov p1.angle, eax
+                invoke FireBullet, addr p1
+            .endif
+        .elseif eax == MSG_MAP_DATA
+            ; Client收到Host发送的地图
+            mov eax, networkMode
+            .if eax == NET_MODE_CLIENT
+                lea esi, netRecvBuffer
+                add esi, 8  ; 跳过msgType(4) + dataLen(4)
+                lea edi, map
+                mov ecx, MAP_ROWS * MAP_COLS
+                rep movsd
+            .endif
         .elseif eax == MSG_DISCONNECT
             ; 对方断线，游戏结束
             mov gameState, STATE_GAME_OVER
@@ -778,6 +834,11 @@ UpdateGame proc
                 .if eax < TANK_HALF_H * SCALE
                     mov p1.active, 0
                     mov (BULLET PTR [esi]).active, 0
+                    ; 如果是Host被击中，通知Client胜利
+                    mov eax, networkMode
+                    .if eax == NET_MODE_HOST
+                        call DisconnectNetwork
+                    .endif
                 .endif
             .endif
 
@@ -798,6 +859,11 @@ UpdateGame proc
                 .if eax < TANK_HALF_H * SCALE
                     mov p2.active, 0
                     mov (BULLET PTR [esi]).active, 0
+                    ; 如果是Client被击中，通知Host胜利
+                    mov eax, networkMode
+                    .if eax == NET_MODE_CLIENT
+                        call DisconnectNetwork
+                    .endif
                 .endif
             .endif
 

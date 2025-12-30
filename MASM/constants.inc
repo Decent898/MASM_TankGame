@@ -50,6 +50,7 @@ MSG_TANK_UPDATE     equ 2
 MSG_FIRE_BULLET     equ 3
 MSG_GAME_STATE      equ 4
 MSG_DISCONNECT      equ 5
+MSG_MAP_DATA        equ 6
 
 ; --- 颜色定义 ---
 COLOR_P1        equ 0000A0FFh   ; 橙色 (BGR格式)

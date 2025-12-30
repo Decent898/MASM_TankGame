@@ -94,3 +94,4 @@
     hInstance   dd ?
     hWnd        dd ?
     buffer      db 128 dup(?)
+    netRecvBuffer db 2048 dup(?)  ; 网络接收缓冲区(需要容纳1208字节的地图数据)

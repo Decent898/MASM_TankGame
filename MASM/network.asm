@@ -264,18 +264,20 @@ SendTankUpdate endp
 
 ; ========================================
 ; ReceiveNetworkData - 接收网络数据
+; 返回值：eax = 消息类型（MSG_*），0表示无消息
+; 数据存储在netRecvBuffer中
 ; ========================================
-ReceiveNetworkData proc
-    LOCAL msgBuf[520]:BYTE
+ReceiveNetworkData proc uses esi edi
+    LOCAL msgBuf[2048]:BYTE
     LOCAL bytesRead:DWORD
     
     mov eax, clientSocket
     test eax, eax
-    jz short RecvFailed
+    jz RecvFailed
     cmp eax, -1
-    je short RecvFailed
+    je RecvFailed
     
-    invoke recv, clientSocket, addr msgBuf, 520, 0
+    invoke recv, clientSocket, addr msgBuf, 2048, 0
     mov bytesRead, eax
     
     ; 调试：显示recv返回值
@@ -284,14 +286,21 @@ ReceiveNetworkData proc
     pop eax
     
     cmp eax, -1
-    je short RecvFailed
+    je RecvFailed
     test eax, eax
-    jz short RecvClosed
+    jz RecvClosed
     
+    ; 复制接收到的数据到全局缓冲区
+    lea esi, msgBuf
+    lea edi, netRecvBuffer
+    mov ecx, bytesRead
+    rep movsb
+    
+    ; 检查是否是断线消息
     lea esi, msgBuf
     mov eax, [esi]
     cmp eax, MSG_DISCONNECT
-    jne short RecvReturn
+    jne RecvReturn
     call DisconnectNetwork
     
 RecvReturn:
@@ -309,7 +318,7 @@ RecvClosed:
 RecvFailed:
     invoke WSAGetLastError
     cmp eax, 10035  ; WSAEWOULDBLOCK - 没有数据可读
-    je short RecvNoData
+    je RecvNoData
     ; 其他错误
     push eax
     invoke crt_printf, ADDR szDbgRecvError, eax
@@ -351,6 +360,46 @@ SendBulletFailed:
     xor eax, eax
     ret
 SendBulletFired endp
+
+; ========================================
+; SendMapData - 发送地图数据
+; ========================================
+SendMapData proc uses esi edi
+    LOCAL msgBuf[1224]:BYTE  ; 4+4+1200 = msgType(4) + dataLen(4) + map(300*4)
+    LOCAL mapSize:DWORD
+    
+    mov eax, clientSocket
+    test eax, eax
+    jz short SendMapFailed
+    cmp eax, -1
+    je short SendMapFailed
+    
+    ; 准备消息头
+    lea edi, msgBuf
+    mov dword ptr [edi], MSG_MAP_DATA
+    mov mapSize, MAP_ROWS * MAP_COLS * 4  ; 300个DWORD
+    mov eax, mapSize
+    mov [edi+4], eax
+    
+    ; 复制地图数据
+    lea esi, map
+    add edi, 8
+    mov ecx, MAP_ROWS * MAP_COLS
+    rep movsd
+    
+    ; 发送
+    mov eax, mapSize
+    add eax, 8  ; 加上消息头
+    invoke send, clientSocket, addr msgBuf, eax, 0
+    cmp eax, -1
+    je short SendMapFailed
+    mov eax, 1
+    ret
+    
+SendMapFailed:
+    xor eax, eax
+    ret
+SendMapData endp
 
 ; ========================================
 ; DisconnectNetwork - 断开网络连接

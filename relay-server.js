@@ -44,7 +44,7 @@ const server = net.createServer((socket) => {
     
     socket.on('data', (data) => {
         const msgType = data.length > 0 ? data[0] : -1;
-        const msgTypeStr = ['UNKNOWN', 'CONNECT', 'TANK_UPDATE', 'FIRE_BULLET', 'HIT', 'DISCONNECT'][msgType] || 'INVALID';
+        const msgTypeStr = ['UNKNOWN', 'CONNECT', 'TANK_UPDATE', 'FIRE_BULLET', 'GAME_STATE', 'DISCONNECT', 'MAP_DATA'][msgType] || 'INVALID';
         console.log(`[RECV] Player ${playerId} sent ${data.length} bytes, MsgType=${msgType}(${msgTypeStr})`);
         
         // 转发给其他玩家

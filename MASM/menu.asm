@@ -125,12 +125,27 @@ HandlePauseInput proc
             jmp @CheckPause
         .elseif eax == 1
             ; 重新开始
-            call InitGame
-            mov gameState, STATE_PLAYING
+            ; 如果是网络模式，不允许重新开始（需要重新连接）
+            mov eax, networkMode
+            .if eax == NET_MODE_HOST || eax == NET_MODE_CLIENT
+                call DisconnectNetwork
+                mov networkMode, NET_MODE_OFFLINE
+                mov gameState, STATE_MENU
+                mov menuSelection, MENU_NETWORK
+            .else
+                call InitGame
+                mov gameState, STATE_PLAYING
+            .endif
             mov menuAnimTick, 30
             jmp @CheckPause
         .elseif eax == 2
             ; 返回菜单
+            ; 如果是网络模式，先断开连接
+            mov eax, networkMode
+            .if eax == NET_MODE_HOST || eax == NET_MODE_CLIENT
+                call DisconnectNetwork
+                mov networkMode, NET_MODE_OFFLINE
+            .endif
             mov gameState, STATE_MENU
             mov menuSelection, MENU_START
         .endif
@@ -211,6 +226,13 @@ HandleNetworkMenuInput proc
     invoke crt_printf, ADDR szDbgGameStart
     mov gameState, STATE_PLAYING
     call InitGame
+    
+    ; 如果是Host，生成地图后发送给Client
+    mov eax, networkMode
+    cmp eax, NET_MODE_HOST
+    jne @NotHost
+    invoke SendMapData
+@NotHost:
     ret
     
 @CheckKeys:
@@ -350,6 +372,13 @@ HandleGameOverInput proc
     
     mov eax, menuAnimTick
     .if eax == 0
+        ; 如果是网络模式，先断开连接
+        mov eax, networkMode
+        .if eax == NET_MODE_HOST || eax == NET_MODE_CLIENT
+            call DisconnectNetwork
+            mov networkMode, NET_MODE_OFFLINE
+        .endif
+        
         ; 返回菜单
         mov gameState, STATE_MENU
         mov menuSelection, MENU_START
