@@ -20,6 +20,7 @@ UpdateAI proc
     LOCAL nextX:DWORD, nextY:DWORD
     LOCAL shouldFire:DWORD
     LOCAL posChanged:DWORD
+    LOCAL moveSuccess:DWORD
     
     .if aiEnabled == 0 || p2.active == 0 || p1.active == 0
         ret
@@ -203,6 +204,9 @@ UpdateAI proc
     
     ; ========== 执行移动 ==========
     .if speed != 0
+        mov moveSuccess, 0  ; 标记变量：记录是否至少有一个方向移动成功
+
+        ; --- 尝试 X 轴移动 ---
         mov edx, p2.angle
         mov eax, cosTable[edx*4]
         imul eax, speed
@@ -210,6 +214,14 @@ UpdateAI proc
         add eax, p2.pos_x
         mov nextX, eax
         
+        invoke CheckTankMove, nextX, p2.pos_y, p2.angle
+        .if eax == 1
+            mov eax, nextX
+            mov p2.pos_x, eax
+            mov moveSuccess, 1  ; X轴移动成功
+        .endif
+        
+        ; --- 尝试 Y 轴移动 ---
         mov edx, p2.angle
         mov eax, sinTable[edx*4]
         imul eax, speed
@@ -217,14 +229,17 @@ UpdateAI proc
         add eax, p2.pos_y
         mov nextY, eax
         
-        invoke CheckTankMove, nextX, nextY, p2.angle
+        invoke CheckTankMove, p2.pos_x, nextY, p2.angle
         .if eax == 1
-            mov eax, nextX
-            mov p2.pos_x, eax
             mov eax, nextY
             mov p2.pos_y, eax
-        .else
-            ; 碰墙了，随机转向
+            mov moveSuccess, 1  ; Y轴移动成功
+        .endif
+        
+        ; --- 卡死检测补充 ---
+        ; 如果 X 和 Y 都没动（moveSuccess == 0），说明完全卡死了
+        ; 此时才执行随机转向，防止 AI 对着墙发呆
+        .if moveSuccess == 0
             invoke crt_rand
             and eax, 1
             .if eax == 0

@@ -321,13 +321,12 @@ WallHit:
     ret
 IsWall endp
 
-; --- 检查坦克是否可以移动（考虑旋转）---
-; 【重大修改】函数重命名为 CheckTankMove，参数名 destX, destY, inAngle 避免一切冲突
-CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
+; --- 检查单个点是否与墙壁碰撞 ---
+; 参数: centerX, centerY (定点数), local_x, local_y (像素偏移), angle
+; 返回: 1=碰撞, 0=安全
+CheckSinglePoint proc uses ebx edi centerX:DWORD, centerY:DWORD, local_x:SDWORD, local_y:SDWORD, inAngle:DWORD
     LOCAL corner_x:DWORD, corner_y:DWORD
     LOCAL cos_val:SDWORD, sin_val:SDWORD
-    LOCAL local_x:SDWORD, local_y:SDWORD
-    ; [已移除] LOCAL rot_x:SDWORD, rot_y:SDWORD (未使用)
     
     ; 获取旋转角度的sin/cos值
     mov edx, inAngle
@@ -335,10 +334,6 @@ CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
     mov cos_val, eax
     mov eax, sinTable[edx*4]
     mov sin_val, eax
-    
-    ; ========== 左上角 (-TANK_HALF_W, -TANK_HALF_H) ==========
-    mov local_x, -TANK_HALF_W
-    mov local_y, -TANK_HALF_H
     
     ; rot_x = local_x * cos - local_y * sin
     mov eax, local_x
@@ -348,7 +343,7 @@ CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
     sub eax, ebx
     sar eax, 8              ; 除以256
     shl eax, 8              ; 转换为定点数
-    add eax, destX          ; 使用 destX
+    add eax, centerX
     mov corner_x, eax
     
     ; rot_y = local_x * sin + local_y * cos
@@ -359,220 +354,127 @@ CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
     add eax, ebx
     sar eax, 8              ; 除以256
     shl eax, 8              ; 转换为定点数
-    add eax, destY          ; 使用 destY
+    add eax, centerY
     mov corner_y, eax
     
     invoke IsWall, corner_x, corner_y
+    ret
+CheckSinglePoint endp
+
+; --- 检查坦克是否可以移动（考虑旋转）---
+; 【增强版】增加更多检测点，提高碰撞检测精度
+CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
+    
+    ; ========== 四个角点检测 ==========
+    ; 左上角 (-TANK_HALF_W, -TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W, -TANK_HALF_H, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 右上角 (+TANK_HALF_W, -TANK_HALF_H) ==========
-    mov local_x, TANK_HALF_W
-    mov local_y, -TANK_HALF_H
-    
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
-    
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
-    
-    invoke IsWall, corner_x, corner_y
+    ; 右上角 (+TANK_HALF_W, -TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W, -TANK_HALF_H, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 左下角 (-TANK_HALF_W, +TANK_HALF_H) ==========
-    mov local_x, -TANK_HALF_W
-    mov local_y, TANK_HALF_H
-    
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
-    
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
-    
-    invoke IsWall, corner_x, corner_y
+    ; 左下角 (-TANK_HALF_W, +TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W, TANK_HALF_H, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 右下角 (+TANK_HALF_W, +TANK_HALF_H) ==========
-    mov local_x, TANK_HALF_W
-    mov local_y, TANK_HALF_H
-    
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
-    
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
-    
-    invoke IsWall, corner_x, corner_y
+    ; 右下角 (+TANK_HALF_W, +TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W, TANK_HALF_H, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 上边中点 (0, -TANK_HALF_H) ==========
-    mov local_x, 0
-    mov local_y, -TANK_HALF_H
-    
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
-    
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
-    
-    invoke IsWall, corner_x, corner_y
+    ; ========== 四边中点检测 ========= =
+    ; 上边中点 (0, -TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, 0, -TANK_HALF_H, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 下边中点 (0, +TANK_HALF_H) ==========
-    mov local_x, 0
-    mov local_y, TANK_HALF_H
-    
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
-    
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
-    
-    invoke IsWall, corner_x, corner_y
+    ; 下边中点 (0, +TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, 0, TANK_HALF_H, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 左边中点 (-TANK_HALF_W, 0) ==========
-    mov local_x, -TANK_HALF_W
-    mov local_y, 0
-    
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
-    
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
-    
-    invoke IsWall, corner_x, corner_y
+    ; 左边中点 (-TANK_HALF_W, 0)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W, 0, inAngle
     .if eax == 1
         mov eax, 0
         ret
     .endif
     
-    ; ========== 右边中点 (+TANK_HALF_W, 0) ==========
-    mov local_x, TANK_HALF_W
-    mov local_y, 0
+    ; 右边中点 (+TANK_HALF_W, 0)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W, 0, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
     
-    mov eax, local_x
-    imul eax, cos_val
-    mov ebx, local_y
-    imul ebx, sin_val
-    sub eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destX
-    mov corner_x, eax
+    ; ========== 增加边缘额外检测点（防止斜角穿墙）==========
+    ; 上边1/4点 (-TANK_HALF_W/2, -TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W/2, -TANK_HALF_H, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
     
-    mov eax, local_x
-    imul eax, sin_val
-    mov ebx, local_y
-    imul ebx, cos_val
-    add eax, ebx
-    sar eax, 8
-    shl eax, 8
-    add eax, destY
-    mov corner_y, eax
+    ; 上边3/4点 (+TANK_HALF_W/2, -TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W/2, -TANK_HALF_H, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
     
-    invoke IsWall, corner_x, corner_y
+    ; 下边1/4点 (-TANK_HALF_W/2, +TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W/2, TANK_HALF_H, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; 下边3/4点 (+TANK_HALF_W/2, +TANK_HALF_H)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W/2, TANK_HALF_H, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; 左边1/4点 (-TANK_HALF_W, -TANK_HALF_H/2)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W, -TANK_HALF_H/2, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; 左边3/4点 (-TANK_HALF_W, +TANK_HALF_H/2)
+    invoke CheckSinglePoint, destX, destY, -TANK_HALF_W, TANK_HALF_H/2, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; 右边1/4点 (+TANK_HALF_W, -TANK_HALF_H/2)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W, -TANK_HALF_H/2, inAngle
+    .if eax == 1
+        mov eax, 0
+        ret
+    .endif
+    
+    ; 右边3/4点 (+TANK_HALF_W, +TANK_HALF_H/2)
+    invoke CheckSinglePoint, destX, destY, TANK_HALF_W, TANK_HALF_H/2, inAngle
     .if eax == 1
         mov eax, 0
         ret
@@ -582,10 +484,19 @@ CheckTankMove proc destX:DWORD, destY:DWORD, inAngle:DWORD
     ret
 CheckTankMove endp
 
+; --- 检查坦克能否旋转到新角度 ---
+; 返回: 1=可以旋转, 0=不能旋转
+CheckTankRotation proc posX:DWORD, posY:DWORD, newAngle:DWORD
+    ; 使用当前位置检查新角度是否会碰撞
+    invoke CheckTankMove, posX, posY, newAngle
+    ret
+CheckTankRotation endp
+
 ; --- 更新游戏逻辑 ---
 UpdateGame proc
     LOCAL speed:DWORD
     LOCAL nextX:DWORD, nextY:DWORD
+    LOCAL newAngle:DWORD
 
     .if p1.active == 0 || p2.active == 0
         ret
@@ -595,24 +506,40 @@ UpdateGame proc
     invoke GetAsyncKeyState, 'A'
     test ax, 8000h
     .if !ZERO?
+        ; 计算新角度
         mov eax, p1.angle
         sub eax, ROT_SPEED
         add eax, 360
         xor edx, edx
         mov ecx, 360
         div ecx
-        mov p1.angle, edx
+        mov newAngle, edx
+        
+        ; 检查旋转是否安全
+        invoke CheckTankRotation, p1.pos_x, p1.pos_y, newAngle
+        .if eax == 1
+            mov eax, newAngle
+            mov p1.angle, eax
+        .endif
     .endif
 
     invoke GetAsyncKeyState, 'D'
     test ax, 8000h
     .if !ZERO?
+        ; 计算新角度
         mov eax, p1.angle
         add eax, ROT_SPEED
         xor edx, edx
         mov ecx, 360
         div ecx
-        mov p1.angle, edx
+        mov newAngle, edx
+        
+        ; 检查旋转是否安全
+        invoke CheckTankRotation, p1.pos_x, p1.pos_y, newAngle
+        .if eax == 1
+            mov eax, newAngle
+            mov p1.angle, eax
+        .endif
     .endif
 
     mov speed, 0
@@ -628,27 +555,34 @@ UpdateGame proc
     .endif
 
     .if speed != 0
+        ; --- 尝试 X 轴移动 ---
         mov edx, p1.angle
         mov eax, cosTable[edx*4]
         imul eax, speed
         sar eax, 8
         add eax, p1.pos_x
-        mov nextX, eax
+        mov nextX, eax      ; 计算新的 X
+        
+        ; 检查 (新X, 旧Y)
+        invoke CheckTankMove, nextX, p1.pos_y, p1.angle
+        .if eax == 1
+            mov eax, nextX
+            mov p1.pos_x, eax ; X 轴无碰撞，更新 X
+        .endif
 
+        ; --- 尝试 Y 轴移动 ---
         mov edx, p1.angle
         mov eax, sinTable[edx*4]
         imul eax, speed
         sar eax, 8
         add eax, p1.pos_y
-        mov nextY, eax
+        mov nextY, eax      ; 计算新的 Y
 
-        ; 【修改】调用新名字函数
-        invoke CheckTankMove, nextX, nextY, p1.angle
+        ; 检查 (新X(如已更新), 新Y) - 注意这里使用 p1.pos_x (它可能已经在上面更新了)
+        invoke CheckTankMove, p1.pos_x, nextY, p1.angle
         .if eax == 1
-            mov eax, nextX
-            mov p1.pos_x, eax
             mov eax, nextY
-            mov p1.pos_y, eax
+            mov p1.pos_y, eax ; Y 轴无碰撞，更新 Y
         .endif
     .endif
 
@@ -667,24 +601,40 @@ UpdateGame proc
         invoke GetAsyncKeyState, VK_LEFT
         test ax, 8000h
         .if !ZERO?
+            ; 计算新角度
             mov eax, p2.angle
             sub eax, ROT_SPEED
             add eax, 360
             xor edx, edx
             mov ecx, 360
             div ecx
-            mov p2.angle, edx
+            mov newAngle, edx
+            
+            ; 检查旋转是否安全
+            invoke CheckTankRotation, p2.pos_x, p2.pos_y, newAngle
+            .if eax == 1
+                mov eax, newAngle
+                mov p2.angle, eax
+            .endif
         .endif
 
         invoke GetAsyncKeyState, VK_RIGHT
         test ax, 8000h
         .if !ZERO?
+            ; 计算新角度
             mov eax, p2.angle
             add eax, ROT_SPEED
             xor edx, edx
             mov ecx, 360
             div ecx
-            mov p2.angle, edx
+            mov newAngle, edx
+            
+            ; 检查旋转是否安全
+            invoke CheckTankRotation, p2.pos_x, p2.pos_y, newAngle
+            .if eax == 1
+                mov eax, newAngle
+                mov p2.angle, eax
+            .endif
         .endif
 
         mov speed, 0
@@ -700,13 +650,21 @@ UpdateGame proc
         .endif
 
         .if speed != 0
+            ; --- 尝试 X 轴移动 ---
             mov edx, p2.angle
             mov eax, cosTable[edx*4]
             imul eax, speed
             sar eax, 8
             add eax, p2.pos_x
             mov nextX, eax
+            
+            invoke CheckTankMove, nextX, p2.pos_y, p2.angle
+            .if eax == 1
+                mov eax, nextX
+                mov p2.pos_x, eax
+            .endif
 
+            ; --- 尝试 Y 轴移动 ---
             mov edx, p2.angle
             mov eax, sinTable[edx*4]
             imul eax, speed
@@ -714,11 +672,8 @@ UpdateGame proc
             add eax, p2.pos_y
             mov nextY, eax
 
-            ; 【修改】调用新名字函数
-            invoke CheckTankMove, nextX, nextY, p2.angle
+            invoke CheckTankMove, p2.pos_x, nextY, p2.angle
             .if eax == 1
-                mov eax, nextX
-                mov p2.pos_x, eax
                 mov eax, nextY
                 mov p2.pos_y, eax
             .endif
