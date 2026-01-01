@@ -275,7 +275,7 @@ DrawGameScene proc hDC:DWORD
     invoke SelectObject, hDC, hWall
     invoke DeleteObject, hBg
 
-    ; 显示暂停提示
+    ; 显示暂停提示 (Updated: 使用醒目的金色)
     invoke SetBkMode, hDC, TRANSPARENT
     invoke CreateFont, 16, 0, 0, 0, FW_NORMAL, 0, 0, 0, \
            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, \
@@ -284,7 +284,8 @@ DrawGameScene proc hDC:DWORD
     invoke SelectObject, hDC, hFont
     mov hOldFont, eax
     
-    invoke SetTextColor, hDC, 00CCCCCCh
+    ; 修改颜色为 COLOR_MENU_HL (金色)
+    invoke SetTextColor, hDC, COLOR_MENU_HL
     invoke TextOut, hDC, 650, 10, addr szPauseInfo, 16
     
     invoke SelectObject, hDC, hOldFont

@@ -384,31 +384,25 @@ DrawMenu proc hDC:DWORD
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
     
-    ; 菜单项字体 - 改为更精致的 28 号字，去掉粗体
+    ; 菜单项字体
     invoke CreateFont, 28, 0, 0, 0, FW_NORMAL, 0, 0, 0, \
            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, \
-           ANTIALIASED_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL ; 使用抗锯齿质量
+           ANTIALIASED_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL
     mov hFont, eax
     invoke SelectObject, hDC, hFont
     
     ; 菜单项背景框
-    ; === 像素风格背景框 (硬核街机风) ===
-    
-    ; 1. 绘制外部高亮边框 (使用金色)
-    invoke CreatePen, PS_SOLID, 4, COLOR_MENU_HL ; 边框加厚到4像素
+    invoke CreatePen, PS_SOLID, 4, COLOR_MENU_HL
     mov hPen, eax
     invoke SelectObject, hDC, hPen
     mov hOldPen, eax
     
-    ; 2. 绘制内部填充 (使用全黑，彻底消除白色)
-    invoke CreateSolidBrush, 00000000h ; 纯黑色背景
+    invoke CreateSolidBrush, 00000000h
     mov hBrush, eax
-    invoke SelectObject, hDC, hBrush ; 关键：必须把画刷选入DC才能消除白色填充
+    invoke SelectObject, hDC, hBrush
     
-    ; 3. 绘制矩形 (使用Rectangle代替RoundRect，更显硬朗)
     invoke Rectangle, hDC, 200, 220, 600, 440 
     
-    ; 清理资源
     invoke DeleteObject, hBrush
     invoke SelectObject, hDC, hOldPen
     invoke DeleteObject, hPen
@@ -419,9 +413,9 @@ DrawMenu proc hDC:DWORD
     .if menuSelection == MENU_START
         invoke SetTextColor, hDC, COLOR_MENU_HL
     .else
-        invoke SetTextColor, hDC, 00808080h ; 建议改为深灰，更有街机感
+        invoke SetTextColor, hDC, 00808080h
     .endif
-    invoke TextOut, hDC, 220, textY, addr szMenuItem1, 13 ; 从 270 修改为 220
+    invoke TextOut, hDC, 220, textY, addr szMenuItem1, 12
     
     ; MODE
     add textY, 45
@@ -430,12 +424,13 @@ DrawMenu proc hDC:DWORD
     .else
         invoke SetTextColor, hDC, 00808080h
     .endif
-    invoke TextOut, hDC, 220, textY, addr szMenuItem2, 9 ; 修改为 220
+    invoke TextOut, hDC, 220, textY, addr szMenuItem2, 8
     
-    ; 显示当前模式 (根据文字缩进，将模式显示也相应左移)
-    invoke TextOut, hDC, 350, textY, addr szModePVP, 3 ; 从 430 移至 350
-    .if gameMode != MODE_PVP
-        invoke TextOut, hDC, 350, textY, addr szModePVE, 10
+    ; 显示当前模式
+    .if gameMode == MODE_PVP
+        invoke TextOut, hDC, 340, textY, addr szModePVP, 3
+    .else
+        invoke TextOut, hDC, 340, textY, addr szModePVE, 11
     .endif
     
     ; DIFFICULTY (仅在PVE模式显示)
@@ -446,15 +441,15 @@ DrawMenu proc hDC:DWORD
         .else
             invoke SetTextColor, hDC, 00808080h
         .endif
-        invoke TextOut, hDC, 220, textY, addr szMenuItem3, 15 ; 修改为 220
+        invoke TextOut, hDC, 220, textY, addr szMenuItem3, 14
         
-        ; 显示当前难度 (从 550 移至 480，给长字符串留出空间)
+        ; 显示当前难度 
         .if aiDifficulty == AI_EASY
-            invoke TextOut, hDC, 480, textY, addr szDiffEasy, 4
+            invoke TextOut, hDC, 440, textY, addr szDiffEasy, 4
         .elseif aiDifficulty == AI_MEDIUM
-            invoke TextOut, hDC, 480, textY, addr szDiffMedium, 6
+            invoke TextOut, hDC, 440, textY, addr szDiffMedium, 6
         .else
-            invoke TextOut, hDC, 480, textY, addr szDiffHard, 4
+            invoke TextOut, hDC, 440, textY, addr szDiffHard, 4
         .endif
     .endif
     
@@ -465,7 +460,7 @@ DrawMenu proc hDC:DWORD
     .else
         invoke SetTextColor, hDC, 00808080h
     .endif
-    invoke TextOut, hDC, 220, textY, addr szMenuItem4, 7 ; 修改为 220
+    invoke TextOut, hDC, 220, textY, addr szMenuItem4, 6
     
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
@@ -476,15 +471,14 @@ DrawMenu proc hDC:DWORD
            DEFAULT_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL
     mov hFont, eax
     invoke SelectObject, hDC, hFont
-    invoke SetTextColor, hDC, 000000FFh  ; 红色
+    invoke SetTextColor, hDC, 000000FFh
     
-    mov heartX, 180 ; 原本是 220，现在配合文字左移到 180
+    mov heartX, 180
     mov eax, menuSelection
     imul eax, 45
     add eax, 245
     mov heartY, eax
     
-    ; 心跳动画逻辑保持
     mov eax, heartBeat
     .if eax < 30
         sub heartX, 5
@@ -495,26 +489,33 @@ DrawMenu proc hDC:DWORD
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
     
-    ; === 底部提示信息 ===
+    ; === 底部提示信息 (Updated) ===
     invoke CreateFont, 20, 0, 0, 0, FW_NORMAL, 0, 0, 0, \
            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, \
            DEFAULT_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL
     mov hFont, eax
     invoke SelectObject, hDC, hFont
     
-    ; 闪烁提示
+    ; --- 设置统一的闪烁颜色 (用于两行提示) ---
     mov eax, heartBeat
-    .if eax < 40
-        invoke SetTextColor, hDC, COLOR_MENU_HL
+    .if eax < 30
+        invoke SetTextColor, hDC, COLOR_MENU_HL  ; 高亮色
     .else
-        invoke SetTextColor, hDC, 00808080h
+        invoke SetTextColor, hDC, 00606060h      ; 暗灰色
     .endif
-    invoke TextOut, hDC, 270, 420, addr szPressKey, 21
     
-    ; 控制说明
+    ; 1. 绘制方向键提示 (移至方框下方 Y=455)
+    invoke TextOut, hDC, 230, 455, addr szHintNav, 36
+    
+    ; 2. 绘制回车键提示 (移至方框下方 Y=480)
+    invoke TextOut, hDC, 275, 480, addr szHintEnter, 26
+    
+    ; 3. 控制说明 (完善文案并居中)
     invoke SetTextColor, hDC, 00C0C0C0h
-    invoke TextOut, hDC, 270, 480, addr szControls1, 19
-    invoke TextOut, hDC, 230, 505, addr szControls2, 25
+    ; PLAYER 1: WASD = MOVE, J = FIRE (31 chars) -> X=245 居中
+    invoke TextOut, hDC, 245, 520, addr szControls1, 31
+    ; PLAYER 2: ARROWS = MOVE, ENTER = FIRE (37 chars) -> X=215 居中
+    invoke TextOut, hDC, 215, 545, addr szControls2, 37
     
     ; 版本信息
     invoke SetTextColor, hDC, 00606060h
@@ -532,18 +533,33 @@ DrawPauseMenu proc hDC:DWORD
     LOCAL hOldFont:DWORD
     LOCAL rect:RECT
     LOCAL hBrush:DWORD
+    LOCAL hPen:DWORD        ; 新增：画笔句柄
+    LOCAL hOldPen:DWORD     ; 新增：旧画笔保存
+    LOCAL hOldBrush:DWORD   ; 新增：旧画刷保存
     LOCAL textY:DWORD
     LOCAL heartY:DWORD
     
-    ; 半透明背景效果（使用暗灰色遮罩）
+    ; === 绘制带边框的背景 ===
+    ; 1. 创建金色边框画笔 (宽度 3)
+    invoke CreatePen, PS_SOLID, 3, COLOR_MENU_HL
+    mov hPen, eax
+    invoke SelectObject, hDC, hPen
+    mov hOldPen, eax
+    
+    ; 2. 创建深色背景画刷
     invoke CreateSolidBrush, 00202020h
     mov hBrush, eax
-    mov rect.left, 150
-    mov rect.top, 150
-    mov rect.right, 650
-    mov rect.bottom, 450
-    invoke FillRect, hDC, addr rect, hBrush
+    invoke SelectObject, hDC, hBrush
+    mov hOldBrush, eax
+    
+    ; 3. 绘制矩形 (自动使用当前选中的画笔画框，画刷填充)
+    invoke Rectangle, hDC, 150, 150, 650, 450
+    
+    ; 4. 清理绘图对象
+    invoke SelectObject, hDC, hOldBrush
+    invoke SelectObject, hDC, hOldPen
     invoke DeleteObject, hBrush
+    invoke DeleteObject, hPen
     
     invoke SetBkMode, hDC, TRANSPARENT
     
@@ -654,7 +670,7 @@ DrawGameOver proc hDC:DWORD
     invoke SelectObject, hDC, hOldFont
     invoke DeleteObject, hFont
     
-    ; 提示按Enter返回
+    ; 提示按Enter返回 (使用 szPressKey, 长度21)
     invoke CreateFont, 24, 0, 0, 0, FW_NORMAL, 0, 0, 0, \
            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, \
            DEFAULT_QUALITY, DEFAULT_PITCH or FF_DONTCARE, NULL
@@ -662,6 +678,7 @@ DrawGameOver proc hDC:DWORD
     invoke SelectObject, hDC, hFont
     invoke SetTextColor, hDC, COLOR_TEXT
     
+    ; szPressKey 已在 data.inc 中定义，长度为 21
     invoke TextOut, hDC, 250, 350, addr szPressKey, 21
     
     invoke SelectObject, hDC, hOldFont

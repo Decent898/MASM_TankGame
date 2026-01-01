@@ -97,6 +97,9 @@ WinMain proc hInst:DWORD, hPrevInst:DWORD, CmdLine:DWORD, CmdShow:DWORD
     LOCAL wc:WNDCLASSEX
     LOCAL msg:MSG
     LOCAL hWindow:DWORD
+    LOCAL rect:RECT       ; 用于计算实际窗口大小
+    LOCAL winW:DWORD
+    LOCAL winH:DWORD
 
     mov eax, hPrevInst
     mov eax, CmdLine
@@ -123,10 +126,32 @@ WinMain proc hInst:DWORD, hPrevInst:DWORD, CmdLine:DWORD, CmdShow:DWORD
 
     invoke RegisterClassEx, addr wc
     
-    ; 创建窗口
+    ; --- 修正窗口大小问题 ---
+    ; 设置期望的客户区大小 (800x600)
+    mov rect.left, 0
+    mov rect.top, 0
+    mov rect.right, WINDOW_W
+    mov rect.bottom, WINDOW_H
+    
+    ; 计算包含标题栏和边框后的实际窗口大小
+    ; 使用 WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX (禁止调整大小)
+    invoke AdjustWindowRect, addr rect, WS_OVERLAPPED or WS_CAPTION or WS_SYSMENU or WS_MINIMIZEBOX, FALSE
+    
+    ; 计算实际宽度
+    mov eax, rect.right
+    sub eax, rect.left
+    mov winW, eax
+    
+    ; 计算实际高度
+    mov eax, rect.bottom
+    sub eax, rect.top
+    mov winH, eax
+
+    ; 创建窗口 (禁止调整大小)
     invoke CreateWindowEx, 0, addr szClassName, addr szAppName, \
-           WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, \
-           WINDOW_W, WINDOW_H, NULL, NULL, hInst, NULL
+           WS_OVERLAPPED or WS_CAPTION or WS_SYSMENU or WS_MINIMIZEBOX, \
+           CW_USEDEFAULT, CW_USEDEFAULT, \
+           winW, winH, NULL, NULL, hInst, NULL
     mov hWindow, eax
     mov hWnd, eax
 

@@ -23,7 +23,15 @@
     szDiffEasy  db "EASY", 0
     szDiffMedium db "MEDIUM", 0
     szDiffHard  db "HARD", 0
-    szPressKey  db "Press ENTER to select", 0
+    
+    ; --- 提示字符串 ---
+    ; Game Over界面使用
+    szPressKey  db "Press ENTER to return", 0
+    
+    ; Menu界面使用
+    szHintNav   db "UP/DOWN: Select   LEFT/RIGHT: Adjust", 0
+    szHintEnter db "[ PRESS ENTER TO CONFIRM ]", 0
+
     szMenuHeart db ">", 0
     szBorder1   db "=", 0
     szBorder2   db "~", 0
@@ -35,9 +43,9 @@
     szRestart   db "* RESTART", 0
     szQuitGame  db "* QUIT TO MENU", 0
     
-    ; --- 控制说明 ---
-    szControls1 db "PLAYER 1: WASD + J", 0
-    szControls2 db "PLAYER 2: ARROWS + ENTER", 0
+    ; --- 控制说明 (已完善) ---
+    szControls1 db "PLAYER 1: WASD = MOVE, J = FIRE", 0           ; 长度 31
+    szControls2 db "PLAYER 2: ARROWS = MOVE, ENTER = FIRE", 0     ; 长度 37
     szPauseInfo db "Press P to Pause", 0
     
     ; --- 音频文件路径（取消注释以启用音乐） ---
